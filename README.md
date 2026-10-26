@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="public/meducid-logo.png" alt="MEDUCID Logo" width="280" />
+</p>
+
 # MEDUCID
 
 > **Understand your lab report in plain language.**
