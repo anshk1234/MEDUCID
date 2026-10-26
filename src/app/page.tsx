@@ -12,6 +12,7 @@ import { SplitScreenWorkspace } from '@/components/SplitScreenWorkspace';
 import { ReportTrackerDashboard } from '@/components/ReportTrackerDashboard';
 import { DashboardHome } from '@/components/DashboardHome';
 import { ShowcaseWebsite } from '@/components/ShowcaseWebsite';
+import { ClarisChatbot } from '@/components/ClarisChatbot';
 import { FileText, LineChart, LayoutDashboard, Globe } from 'lucide-react';
 
 export default function MeducidApp() {
@@ -314,6 +315,14 @@ export default function MeducidApp() {
           )}
         </div>
       )}
+      {/* Floating Retractable Medical Terminology Assistant */}
+      <ClarisChatbot
+        reportContext={
+          currentReport
+            ? `Report with ${currentReport.findings.length} findings: ${currentReport.findings.slice(0, 10).map((f) => f.testName + ': ' + f.originalValue + ' ' + (f.unit || '')).join(', ')}`
+            : undefined
+        }
+      />
     </div>
   );
 }

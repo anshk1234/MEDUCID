@@ -66,7 +66,8 @@ export interface GeminiContentPart {
  */
 export async function callGeminiWithRotation(
   parts: GeminiContentPart[],
-  systemInstruction?: string
+  systemInstruction?: string,
+  responseMimeType: string = 'application/json'
 ): Promise<{ text: string; modelUsed: string; keyIndexUsed: number }> {
   const keys = getApiKeys();
   const maxAttempts = keys.length * GEMINI_MODELS.length;
@@ -89,7 +90,7 @@ export async function callGeminiWithRotation(
           },
         ],
         generationConfig: {
-          responseMimeType: 'application/json',
+          responseMimeType,
           temperature: 0.1,
         },
       };
