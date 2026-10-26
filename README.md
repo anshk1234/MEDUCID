@@ -8,6 +8,10 @@
 
 MEDUCID is a web application that takes medical laboratory reports (such as blood tests, metabolic panels, and urinalysis) and presents them in clear, readable language. It displays the original document side-by-side with extracted measurements, checks whether values fall within their printed reference ranges, and explains what each biomarker measures in simple terms without providing medical diagnoses.
 
+<p align="center">
+  <img src="docs/images/meducid-landing.png" alt="MEDUCID Landing Page & Showcase" width="100%" />
+</p>
+
 ---
 
 ## What It Does
@@ -20,6 +24,10 @@ When you receive a laboratory report, it is often filled with abbreviations, tec
 - **Plain-Language Explanations**: Explains what each biomarker is in general terms (for example, *Eosinophils: A type of white blood cell*) without guessing causes or diagnosing illnesses.
 - **Neutral Clinician Questions**: Generates objective, factual questions you can take to your doctor or healthcare provider.
 - **User Correction Flow**: Allows you to edit any extracted value, unit, or range directly in the interface if needed.
+
+<p align="center">
+  <img src="docs/images/meducid-workspace.png" alt="MEDUCID Interactive Split-Screen Workspace" width="100%" />
+</p>
 
 ---
 
