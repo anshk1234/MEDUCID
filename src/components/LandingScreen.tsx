@@ -246,12 +246,6 @@ export function LandingScreen({
         </p>
       </div>
 
-      {/* Sample-Data Guard Banner (Warm Attention Status) */}
-      <div className="w-full max-w-2xl mb-4 p-3 bg-[#ffe0d8] border border-[#ff593e]/30 rounded-xl flex items-center justify-center gap-2 text-xs text-[#9f2e1c] font-bold text-center shadow-xs">
-        <AlertCircle className="w-4 h-4 text-[#9f2e1c] shrink-0" />
-        <span>Use synthetic or de-identified reports only. All processing remains locally sandboxed.</span>
-      </div>
-
       {/* Main Centered Dropzone Card (Cream #fffefa, Crisp border-2, rounded-2xl) */}
       <div className="w-full max-w-2xl">
         <div
