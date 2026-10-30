@@ -114,7 +114,7 @@ Keep responses between 80 and 130 words. Concise, crisp, and easily readable in 
           const recentUserHistory = (history as HistoryMessage[])
             .slice(-12)
             .filter((h) => h?.role === 'user' && typeof h?.text === 'string')
-            .map((h) => h.text!.replace(/\n+/g, ' ').trim().substring(0, 200))
+            .map((h) => (h.text as string).replace(/\n+/g, ' ').trim().substring(0, 200))
             .filter(Boolean)
             .slice(-6);
 
