@@ -84,6 +84,13 @@ export function ClarisChatbot({ reportContext }: ClarisChatbotProps) {
         body: JSON.stringify({
           message: query,
           reportContext,
+          history: messages
+            .filter((m) => m.id !== 'welcome' && m.id !== 'welcome-reset')
+            .slice(-6)
+            .map((m) => ({
+              role: m.sender === 'user' ? 'user' : 'model',
+              text: m.text,
+            })),
         }),
       });
 
