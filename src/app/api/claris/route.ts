@@ -3,8 +3,8 @@ import { callGeminiWithRotation, getApiKeys, GeminiContentPart } from '@/lib/gem
 import { lookupMedicalTerm } from '@/data/medicalTerms';
 
 interface HistoryMessage {
-  role: 'user' | 'model';
-  text: string;
+  role?: unknown;
+  text?: unknown;
 }
 
 // Cheap rule-based detector to add a prompt hint without adding an extra LLM call
@@ -22,7 +22,6 @@ function detectUrgentSymptom(text: string): boolean {
     /\bspeech\s+slurr(ed|ing)\b/i,
     /\bheart\s+attack\b/i,
     /\bstroke\b/i,
-    /\bemergency\b/i,
   ];
   return urgentKeywords.some((pattern) => pattern.test(text));
 }
@@ -112,14 +111,20 @@ Keep responses between 80 and 130 words. Concise, crisp, and easily readable in 
         }
 
         if (Array.isArray(history) && history.length > 0) {
-          promptText += `[Recent Conversation History]:\n`;
-          const recentHistory: HistoryMessage[] = history.slice(-6);
-          for (const h of recentHistory) {
-            const roleLabel = h.role === 'user' ? 'User' : 'Claris';
-            const cleanText = (h.text || '').replace(/\n+/g, ' ').substring(0, 200);
-            promptText += `${roleLabel}: ${cleanText}\n`;
+          const recentUserHistory = (history as HistoryMessage[])
+            .slice(-12)
+            .filter((h) => h?.role === 'user' && typeof h?.text === 'string')
+            .map((h) => h.text!.replace(/\n+/g, ' ').trim().substring(0, 200))
+            .filter(Boolean)
+            .slice(-6);
+
+          if (recentUserHistory.length > 0) {
+            promptText += `[Recent User Questions]:\n`;
+            for (const userText of recentUserHistory) {
+              promptText += `User: ${userText}\n`;
+            }
+            promptText += `\n`;
           }
-          promptText += `\n`;
         }
 
         if (isUrgent) {
