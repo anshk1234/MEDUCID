@@ -1,17 +1,17 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import {
-  Activity, ArrowDownRight, ArrowRight, BookOpen, CheckCircle2, ChevronDown,
-  CircleHelp, ClipboardCheck, FileText, HeartPulse, LockKeyhole, Menu,
-  Microscope, MessageCircleQuestion, RotateCcw, Scale, ShieldCheck, Sparkles,
-  Stethoscope, TrendingUp, X,
+  Activity, ArrowDownRight, ArrowRight, BookOpen, Check, CheckCircle2, ChevronDown,
+  CircleHelp, ClipboardCheck, FileSearch, FileText, FileUp, HeartPulse, Highlighter,
+  Languages, LockKeyhole, Menu, MessageCircleQuestion, MessageSquareQuote, MessagesSquare, Microscope,
+  RotateCcw, Scale, ShieldCheck, SlidersHorizontal, Sparkles, Stethoscope, TrendingUp, UserCheck, X,
 } from 'lucide-react';
 
 const navItems = [
   { label: 'How it works', href: '#how-it-works' },
   { label: 'Features', href: '#features' },
-  { label: 'Quick facts', href: '#facts' },
   { label: 'Safety', href: '#safety' },
   { label: 'FAQ', href: '#faq' },
 ];
@@ -70,16 +70,7 @@ function Header({ onOpenDashboard }: { onOpenDashboard: () => void }) {
             {navItems.map((item) => (
               <a key={item.href} onClick={closeMenu} href={item.href} className="rounded-lg px-4 py-3 text-sm font-semibold transition hover:bg-paper">{item.label}</a>
             ))}
-            <button
-              type="button"
-              onClick={() => {
-                closeMenu();
-                onOpenDashboard();
-              }}
-              className="rounded-lg px-4 py-3 text-sm font-bold text-teal transition hover:bg-paper text-left md:text-center cursor-pointer"
-            >
-              Dashboard
-            </button>
+
           </nav>
           <a
             href="https://github.com/anshk1234/MEDUCID"
@@ -103,30 +94,372 @@ function Header({ onOpenDashboard }: { onOpenDashboard: () => void }) {
   );
 }
 
-function ReportMiniCard({ variant, icon: Icon, label, title, detail, caption, footerDark = false, onClick }: any) {
+
+interface HeroCardData {
+  id: string;
+  variant: string;
+  icon: React.ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
+  label: string;
+  title: string;
+  detail: string;
+  caption: string;
+  footerDark?: boolean;
+  miniContent: React.ReactNode;
+  expandedContent: React.ReactNode;
+}
+
+const HERO_CARDS: HeroCardData[] = [
+  {
+    id: 'cbc',
+    variant: 'card-tilt-1',
+    icon: FileText,
+    label: 'Your report',
+    title: 'CBC',
+    detail: 'Blood count · example',
+    caption: 'Key terms, explained',
+    footerDark: false,
+    miniContent: (
+      <div className="mt-auto grid gap-1.5 pt-2">
+        <div className="flex items-center justify-between text-[9px] font-medium leading-tight">
+          <span className="text-muted">Hemoglobin</span>
+          <span className="font-bold text-ink">13.8 g/dL</span>
+        </div>
+        <div className="flex items-center justify-between text-[9px] font-medium leading-tight">
+          <span className="text-muted">WBC count</span>
+          <span className="font-bold text-ink">6.4 K/µL</span>
+        </div>
+        <div className="flex items-center justify-between text-[9px] font-medium leading-tight">
+          <span className="text-muted">Platelets</span>
+          <span className="font-bold text-ink">240 K/µL</span>
+        </div>
+      </div>
+    ),
+    expandedContent: (
+      <div className="space-y-4 text-left">
+        <p className="text-xs leading-relaxed text-muted">
+          A Complete Blood Count (CBC) examines cellular components circulating in your bloodstream.
+        </p>
+        <div className="space-y-2.5 rounded-2xl border border-ink/10 bg-paper p-3.5">
+          <div className="flex items-center justify-between text-xs border-b border-black/5 pb-2">
+            <div>
+              <span className="font-black text-ink">Hemoglobin</span>
+              <span className="block text-[10px] text-muted">Ref: 12.0 – 16.0 g/dL · Oxygen carrier</span>
+            </div>
+            <span className="font-black text-teal">13.8 <span className="text-[10px] font-normal text-muted">g/dL</span></span>
+          </div>
+          <div className="flex items-center justify-between text-xs border-b border-black/5 pb-2">
+            <div>
+              <span className="font-black text-ink">WBC (White Blood Cells)</span>
+              <span className="block text-[10px] text-muted">Ref: 4.5 – 11.0 K/µL · Immune defense</span>
+            </div>
+            <span className="font-black text-teal">6.4 <span className="text-[10px] font-normal text-muted">K/µL</span></span>
+          </div>
+          <div className="flex items-center justify-between text-xs">
+            <div>
+              <span className="font-black text-ink">Platelets</span>
+              <span className="block text-[10px] text-muted">Ref: 150 – 450 K/µL · Normal clotting</span>
+            </div>
+            <span className="font-black text-teal">240 <span className="text-[10px] font-normal text-muted">K/µL</span></span>
+          </div>
+        </div>
+      </div>
+    ),
+  },
+  {
+    id: 'plain-language',
+    variant: 'card-tilt-2 -ml-3 z-[2]',
+    icon: BookOpen,
+    label: 'Plain language',
+    title: '01 / 03',
+    detail: 'Clearer explanations',
+    caption: 'Break the jargon down',
+    footerDark: true,
+    miniContent: (
+      <div className="mt-auto pt-3">
+        <div className="inline-flex items-center gap-1.5 rounded-lg border border-teal/20 bg-teal/5 px-2 py-1">
+          <span className="text-[10px] font-black text-teal">MCV</span>
+          <span className="text-xs text-teal/60">→</span>
+        </div>
+        <p className="mt-1.5 text-[9.5px] font-semibold leading-tight text-ink">
+          Average size of your red blood cells
+        </p>
+      </div>
+    ),
+    expandedContent: (
+      <div className="space-y-4 text-left">
+        <p className="text-xs leading-relaxed text-muted">
+          Laboratory reports frequently use clinical shorthand. MEDUCID translates abbreviations into intuitive descriptions while maintaining accurate context.
+        </p>
+        <div className="space-y-2.5">
+          <div className="rounded-xl border border-ink/10 bg-paper p-3">
+            <div className="flex items-center gap-2">
+              <span className="rounded-md border border-teal/20 bg-teal/10 px-2 py-0.5 text-xs font-black text-teal">MCV</span>
+              <span className="text-xs font-semibold text-muted">Mean Corpuscular Volume</span>
+            </div>
+            <p className="mt-1.5 text-xs font-medium text-ink">The average physical volume and size of individual red blood cells in your sample.</p>
+          </div>
+          <div className="rounded-xl border border-ink/10 bg-paper p-3">
+            <div className="flex items-center gap-2">
+              <span className="rounded-md border border-teal/20 bg-teal/10 px-2 py-0.5 text-xs font-black text-teal">MCH</span>
+              <span className="text-xs font-semibold text-muted">Mean Corpuscular Hemoglobin</span>
+            </div>
+            <p className="mt-1.5 text-xs font-medium text-ink">The average amount of oxygen-binding hemoglobin inside each red blood cell.</p>
+          </div>
+          <div className="rounded-xl border border-ink/10 bg-paper p-3">
+            <div className="flex items-center gap-2">
+              <span className="rounded-md border border-teal/20 bg-teal/10 px-2 py-0.5 text-xs font-black text-teal">HCT</span>
+              <span className="text-xs font-semibold text-muted">Hematocrit</span>
+            </div>
+            <p className="mt-1.5 text-xs font-medium text-ink">The percentage proportion of your total blood volume made up of red blood cells.</p>
+          </div>
+        </div>
+      </div>
+    ),
+  },
+  {
+    id: 'your-numbers',
+    variant: 'card-tilt-3 -ml-3 z-[3]',
+    icon: Activity,
+    label: 'Your numbers',
+    title: 'Context',
+    detail: 'Units and ranges',
+    caption: 'Read the report carefully',
+    footerDark: false,
+    miniContent: (
+      <div className="mt-auto grid gap-1 pt-2">
+        <div className="flex items-baseline justify-between text-[9.5px]">
+          <span className="font-black text-ink">Hemoglobin</span>
+          <span className="font-bold text-teal">13.8 g/dL</span>
+        </div>
+        <p className="text-[8.5px] font-medium leading-tight text-muted">
+          Within the range printed on your report
+        </p>
+      </div>
+    ),
+    expandedContent: (
+      <div className="space-y-4 text-left">
+        <p className="text-xs leading-relaxed text-muted">
+          A numeric value only has meaning when paired with its laboratory unit and the specific reference interval printed on your document.
+        </p>
+        <div className="rounded-2xl border border-ink/10 bg-paper p-4">
+          <div className="flex items-baseline justify-between">
+            <div>
+              <span className="text-[10px] font-black uppercase tracking-wider text-muted">Test Result</span>
+              <div className="text-2xl font-black text-ink">13.8 <span className="text-sm font-semibold text-muted">g/dL</span></div>
+            </div>
+            <span className="rounded-full bg-teal/10 px-2.5 py-1 text-[11px] font-extrabold text-teal">Inside Reference Band</span>
+          </div>
+          <div className="mt-3 flex items-center justify-between rounded-xl bg-white border border-ink/5 p-3 text-xs">
+            <span className="text-muted">Report Reference Interval</span>
+            <span className="font-bold text-ink">12.0 — 16.0 g/dL</span>
+          </div>
+        </div>
+        <div className="rounded-xl border border-ink/10 bg-[#fffefa] p-3 text-xs leading-relaxed text-muted">
+          💡 <strong className="text-ink">Context matters:</strong> Reference intervals depend on equipment, demographic norms, and laboratory methodology. A clinician evaluates your results against your whole health picture.
+        </div>
+      </div>
+    ),
+  },
+  {
+    id: 'next-steps',
+    variant: 'card-tilt-4 -ml-3 z-[2]',
+    icon: ClipboardCheck,
+    label: 'Next steps',
+    title: 'Ask',
+    detail: 'Your next conversation',
+    caption: 'Prepare better questions',
+    footerDark: true,
+    miniContent: (
+      <div className="mt-auto grid gap-1.5 pt-2">
+        <div className="flex items-center gap-1.5 text-[8.5px] font-medium text-ink leading-tight">
+          <span className="h-2.5 w-2.5 shrink-0 rounded-[2px] border border-teal/50 bg-white" />
+          <span className="truncate">What does this result mean for me?</span>
+        </div>
+        <div className="flex items-center gap-1.5 text-[8.5px] font-medium text-ink leading-tight">
+          <span className="h-2.5 w-2.5 shrink-0 rounded-[2px] border border-teal/50 bg-white" />
+          <span className="truncate">Should we repeat this test?</span>
+        </div>
+        <div className="flex items-center gap-1.5 text-[8.5px] font-medium text-ink leading-tight">
+          <span className="h-2.5 w-2.5 shrink-0 rounded-[2px] border border-teal/50 bg-white" />
+          <span className="truncate">What should I keep track of?</span>
+        </div>
+      </div>
+    ),
+    expandedContent: (
+      <div className="space-y-4 text-left">
+        <p className="text-xs leading-relaxed text-muted">
+          Having targeted questions written down helps you get clear, actionable answers from your doctor without feeling rushed.
+        </p>
+        <div className="space-y-2">
+          <div className="flex items-start gap-2.5 rounded-xl border border-ink/10 bg-paper p-3 text-xs">
+            <span className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded border border-teal/60 bg-white" />
+            <span className="font-semibold text-ink">What does this specific result indicate in light of my health history and symptoms?</span>
+          </div>
+          <div className="flex items-start gap-2.5 rounded-xl border border-ink/10 bg-paper p-3 text-xs">
+            <span className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded border border-teal/60 bg-white" />
+            <span className="font-semibold text-ink">Should any of these tests be re-checked or tracked periodically?</span>
+          </div>
+          <div className="flex items-start gap-2.5 rounded-xl border border-ink/10 bg-paper p-3 text-xs">
+            <span className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded border border-teal/60 bg-white" />
+            <span className="font-semibold text-ink">What specific signs, markers, or symptoms should I keep track of at home?</span>
+          </div>
+          <div className="flex items-start gap-2.5 rounded-xl border border-ink/10 bg-paper p-3 text-xs">
+            <span className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded border border-teal/60 bg-white" />
+            <span className="font-semibold text-ink">Do current prescriptions, supplements, or recent lifestyle changes affect these results?</span>
+          </div>
+        </div>
+      </div>
+    ),
+  },
+  {
+    id: 'your-care',
+    variant: 'card-tilt-5 -ml-3 z-[1]',
+    icon: Stethoscope,
+    label: 'Your care',
+    title: 'Together',
+    detail: 'Patient and clinician',
+    caption: 'Make the visit count',
+    footerDark: false,
+    miniContent: (
+      <div className="mt-auto grid gap-1.5 pt-2">
+        <div className="flex items-center gap-1.5 text-[9px] font-semibold text-ink leading-tight">
+          <span className="grid h-3 w-3 shrink-0 place-items-center rounded-[3px] bg-teal text-white">
+            <Check size={8} strokeWidth={3} />
+          </span>
+          <span>Report brought</span>
+        </div>
+        <div className="flex items-center gap-1.5 text-[9px] font-semibold text-ink leading-tight">
+          <span className="grid h-3 w-3 shrink-0 place-items-center rounded-[3px] bg-teal text-white">
+            <Check size={8} strokeWidth={3} />
+          </span>
+          <span>Questions ready</span>
+        </div>
+        <div className="flex items-center gap-1.5 text-[9px] font-semibold text-ink leading-tight">
+          <span className="grid h-3 w-3 shrink-0 place-items-center rounded-[3px] bg-teal text-white">
+            <Check size={8} strokeWidth={3} />
+          </span>
+          <span>Follow-ups noted</span>
+        </div>
+      </div>
+    ),
+    expandedContent: (
+      <div className="space-y-4 text-left">
+        <p className="text-xs leading-relaxed text-muted">
+          Your consultation is a partnership. Arriving prepared helps ensure all your concerns are addressed thoroughly.
+        </p>
+        <div className="space-y-2">
+          <div className="flex items-center gap-3 rounded-xl border border-ink/10 bg-paper p-3 text-xs font-semibold text-ink">
+            <span className="grid h-5 w-5 shrink-0 place-items-center rounded-md bg-teal text-white">
+              <Check size={12} strokeWidth={3} />
+            </span>
+            <span>Printed or digital copy of your full lab report brought</span>
+          </div>
+          <div className="flex items-center gap-3 rounded-xl border border-ink/10 bg-paper p-3 text-xs font-semibold text-ink">
+            <span className="grid h-5 w-5 shrink-0 place-items-center rounded-md bg-teal text-white">
+              <Check size={12} strokeWidth={3} />
+            </span>
+            <span>Prioritized list of questions prepared in advance</span>
+          </div>
+          <div className="flex items-center gap-3 rounded-xl border border-ink/10 bg-paper p-3 text-xs font-semibold text-ink">
+            <span className="grid h-5 w-5 shrink-0 place-items-center rounded-md bg-teal text-white">
+              <Check size={12} strokeWidth={3} />
+            </span>
+            <span>Current list of medicines, vitamins, and dosages handy</span>
+          </div>
+          <div className="flex items-center gap-3 rounded-xl border border-ink/10 bg-paper p-3 text-xs font-semibold text-ink">
+            <span className="grid h-5 w-5 shrink-0 place-items-center rounded-md bg-teal text-white">
+              <Check size={12} strokeWidth={3} />
+            </span>
+            <span>Follow-up schedule and doctor instructions noted during visit</span>
+          </div>
+        </div>
+      </div>
+    ),
+  },
+];
+
+function ReportMiniCard({
+  card,
+  onClick,
+  buttonRef,
+}: {
+  card: HeroCardData;
+  onClick: () => void;
+  buttonRef?: (node: HTMLButtonElement | null) => void;
+}) {
+  const Icon = card.icon;
   return (
-    <article
+    <button
+      type="button"
+      ref={buttonRef}
       onClick={onClick}
-      className={`feature-tilt relative flex min-h-[230px] w-[155px] shrink-0 flex-col overflow-hidden rounded-2xl border border-ink/10 bg-cream shadow-lg sm:w-[190px] cursor-pointer ${variant}`}
+      aria-haspopup="dialog"
+      aria-label={`View details: ${card.title} - ${card.label}`}
+      className={`feature-tilt relative flex h-[242px] sm:h-[248px] w-[155px] shrink-0 flex-col overflow-hidden rounded-2xl border border-ink/10 bg-cream text-left shadow-lg sm:w-[190px] cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal focus-visible:ring-offset-2 select-none ${card.variant}`}
     >
       <div className="flex flex-1 flex-col p-4">
         <div className="flex items-center justify-between gap-2 text-[9px] font-black uppercase tracking-[.12em] text-muted">
-          <span>{label}</span><span className="grid h-7 w-7 place-items-center rounded-lg border border-ink bg-lime text-ink"><Icon size={15} /></span>
+          <span>{card.label}</span>
+          <Icon size={24} strokeWidth={1.5} className="text-teal shrink-0" />
         </div>
-        <div className="mt-5 text-[29px] font-black leading-none tracking-[-.06em]">{title}</div>
-        <p className="mt-2 text-[11px] leading-snug text-muted">{detail}</p>
-        <div className="mt-auto grid gap-2 pt-4" aria-hidden="true">
-          <span className="h-1.5 rounded-full bg-black/10" />
-          <span className="h-1.5 w-4/5 rounded-full bg-black/10" />
-          <span className="h-1.5 w-3/5 rounded-full bg-black/10" />
-        </div>
+        <div className="mt-5 text-[29px] font-black leading-none tracking-[-.06em] text-ink">{card.title}</div>
+        <p className="mt-2 text-[11px] leading-snug text-muted">{card.detail}</p>
+        {card.miniContent}
       </div>
-      <div className={`flex min-h-[58px] items-center justify-center px-3 py-3 text-center text-[11px] font-extrabold leading-snug ${footerDark ? 'bg-wine text-white' : 'bg-[#f0eee6] text-[#5d2630]'}`}>{caption}</div>
-    </article>
+      <div className={`flex h-[54px] shrink-0 items-center justify-center px-3 py-2 text-center text-[11px] font-extrabold leading-snug ${card.footerDark ? 'bg-wine text-white' : 'bg-[#f0eee6] text-[#5d2630]'}`}>
+        {card.caption}
+      </div>
+    </button>
   );
 }
 
 function Hero({ onOpenDashboard }: { onOpenDashboard: () => void }) {
+  const [activeCard, setActiveCard] = useState<HeroCardData | null>(null);
+  const [mounted, setMounted] = useState(false);
+  const triggerRefs = useRef<{ [key: string]: HTMLButtonElement | null }>({});
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const handleClose = useCallback(() => {
+    if (activeCard) {
+      const cardId = activeCard.id;
+      setActiveCard(null);
+      requestAnimationFrame(() => {
+        triggerRefs.current[cardId]?.focus();
+      });
+    }
+  }, [activeCard]);
+
+  useEffect(() => {
+    if (!activeCard) return;
+
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const timer = setTimeout(() => {
+      closeButtonRef.current?.focus();
+    }, 50);
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        handleClose();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+      clearTimeout(timer);
+    };
+  }, [activeCard, handleClose]);
+
+  const ActiveIcon = activeCard?.icon;
+
   return (
     <section id="home" className="relative isolate overflow-hidden pb-16 pt-10 text-center sm:pb-20 sm:pt-14">
       <div className="hero-blob" />
@@ -144,24 +477,75 @@ function Hero({ onOpenDashboard }: { onOpenDashboard: () => void }) {
         <div className="mt-6 flex flex-wrap items-center justify-center gap-4">
           <LimeButton onClick={onOpenDashboard}>LET’S READ YOUR REPORT</LimeButton>
           <a className="inline-flex items-center gap-2 border-b border-black/40 px-1 py-3 text-xs font-extrabold cursor-pointer" href="#how-it-works">See how MEDUCID works <ArrowDownRight size={15} /></a>
-          <button
-            type="button"
-            onClick={onOpenDashboard}
-            className="inline-flex items-center gap-1 border-b border-black/40 px-1 py-3 text-xs font-extrabold cursor-pointer text-teal hover:text-ink"
-          >
-            Open Dashboard ↗
-          </button>
         </div>
         <p className="mx-auto mt-4 max-w-md text-[10px] leading-5 text-muted">Designed to support informed conversations. Not a diagnosis, treatment recommendation, or substitute for medical care.</p>
         
         <div className="mx-auto mt-12 flex max-w-[1020px] items-center justify-start overflow-x-auto px-8 pb-8 pt-4 sm:mt-16 sm:justify-center">
-          <ReportMiniCard onClick={onOpenDashboard} variant="card-tilt-1" icon={FileText} label="Your report" title="CBC" detail="Blood count · example" caption="Key terms, explained" />
-          <ReportMiniCard onClick={onOpenDashboard} footerDark variant="card-tilt-2 -ml-3 z-[2]" icon={BookOpen} label="Plain language" title="01 / 03" detail="Clearer explanations" caption="Break the jargon down" />
-          <ReportMiniCard onClick={onOpenDashboard} variant="card-tilt-3 -ml-3 z-[3]" icon={Activity} label="Your numbers" title="Context" detail="Units and ranges" caption="Read the report carefully" />
-          <ReportMiniCard onClick={onOpenDashboard} footerDark variant="card-tilt-4 -ml-3 z-[2]" icon={ClipboardCheck} label="Next steps" title="Ask" detail="Your next conversation" caption="Prepare better questions" />
-          <ReportMiniCard onClick={onOpenDashboard} variant="card-tilt-5 -ml-3 z-[1]" icon={Stethoscope} label="Your care" title="Together" detail="Patient and clinician" caption="Make the visit count" />
+          {HERO_CARDS.map((card) => (
+            <ReportMiniCard
+              key={card.id}
+              card={card}
+              buttonRef={(el) => {
+                triggerRefs.current[card.id] = el;
+              }}
+              onClick={() => setActiveCard(card)}
+            />
+          ))}
         </div>
       </div>
+
+      {mounted && activeCard && ActiveIcon && createPortal(
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/45 backdrop-blur-md transition-opacity duration-300"
+          onClick={handleClose}
+          aria-hidden="false"
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="hero-card-dialog-title"
+            onClick={(e) => e.stopPropagation()}
+            className="animate-hero-dialog relative flex w-[92vw] max-w-[480px] max-h-[88vh] flex-col overflow-hidden rounded-3xl border-2 border-ink bg-cream shadow-2xl text-left"
+          >
+            {/* Top Bar */}
+            <div className="flex items-center justify-between border-b border-ink/10 px-6 py-4 bg-paper/60">
+              <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[.14em] text-muted">
+                <span>{activeCard.label}</span>
+                <ActiveIcon size={20} strokeWidth={1.5} className="text-teal" />
+              </div>
+              <button
+                ref={closeButtonRef}
+                type="button"
+                onClick={handleClose}
+                aria-label="Close"
+                className="grid h-10 w-10 min-w-[40px] min-h-[40px] place-items-center rounded-xl border border-ink/15 bg-white text-ink transition hover:bg-neutral-100 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Dialog Body */}
+            <div className="flex-1 overflow-y-auto px-6 py-5">
+              <h3 id="hero-card-dialog-title" className="text-3xl font-black leading-none tracking-tight text-ink sm:text-4xl">
+                {activeCard.title}
+              </h3>
+              <p className="mt-1.5 text-xs font-semibold text-muted">
+                {activeCard.detail}
+              </p>
+
+              <div className="mt-5">
+                {activeCard.expandedContent}
+              </div>
+            </div>
+
+            {/* Dialog Footer */}
+            <div className={`flex min-h-[52px] items-center justify-center px-6 py-3 text-center text-xs font-extrabold leading-snug ${activeCard.footerDark ? 'bg-wine text-white' : 'bg-[#f0eee6] text-[#5d2630]'}`}>
+              {activeCard.caption}
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </section>
   );
 }
@@ -178,9 +562,9 @@ function SectionHeading({ eyebrow, title, children, center = false }: { eyebrow:
 
 function HowItWorks() {
   const steps = [
-    { number: '01', icon: FileText, title: 'Add your report', body: 'Start with a supported PDF or image of your report. Review the document before sharing anything sensitive.' },
-    { number: '02', icon: BookOpen, title: 'Explore the explanation', body: 'Get plain-language definitions, an organized summary, and context for terms that are easy to misread.' },
-    { number: '03', icon: ClipboardCheck, title: 'Prepare for a conversation', body: 'Build a shortlist of questions to take to a qualified professional. Your clinician interprets results in your full health context.' },
+    { number: '01', icon: FileUp, title: 'Add your report', body: 'Start with a supported PDF or image of your report. Review the document before sharing anything sensitive.' },
+    { number: '02', icon: FileSearch, title: 'Explore the explanation', body: 'Get plain-language definitions, an organized summary, and context for terms that are easy to misread.' },
+    { number: '03', icon: MessageSquareQuote, title: 'Prepare for a conversation', body: 'Build a shortlist of questions to take to a qualified professional. Your clinician interprets results in your full health context.' },
   ];
 
   return (
@@ -189,7 +573,7 @@ function HowItWorks() {
       <div className="grid gap-4 md:grid-cols-3">
         {steps.map(({ number, icon: Icon, title, body }) => (
           <article key={number} className="rounded-2xl border border-ink/10 bg-cream p-6 shadow-[0_5px_0_rgba(20,20,20,.04)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_12px_25px_rgba(20,20,20,.08)] sm:p-7">
-            <div className="flex items-center justify-between"><span className="display-font text-4xl text-teal">{number}</span><span className="grid h-12 w-12 place-items-center rounded-xl border border-ink bg-lime"><Icon size={22} /></span></div>
+            <div className="flex items-center justify-between"><span className="display-font text-4xl text-teal leading-none">{number}</span><Icon size={44} strokeWidth={1.5} className="text-teal shrink-0" /></div>
             <h3 className="mt-8 text-xl font-black tracking-tight text-ink">{title}</h3>
             <p className="mt-3 text-sm leading-7 text-muted">{body}</p>
           </article>
@@ -201,10 +585,10 @@ function HowItWorks() {
 
 function Features() {
   const features = [
-    { icon: FileText, title: 'Complex terms, simpler words.', body: 'Understand abbreviations and technical phrases without pretending every medical term is obvious.' },
-    { icon: Activity, title: 'Find the important parts faster.', body: 'Organize a report into a readable summary, notable terms, and points that may warrant a professional explanation.' },
-    { icon: CircleHelp, title: 'Know what you still need to ask.', body: 'Generate questions for your appointment instead of jumping to conclusions from a single number or flag.' },
-    { icon: LockKeyhole, title: 'Support for understanding. Not a diagnosis.', body: 'Clear boundaries between explanation, uncertainty, and decisions that belong with a healthcare professional.' },
+    { icon: Languages, title: 'Complex terms, simpler words.', body: 'Understand abbreviations and technical phrases without pretending every medical term is obvious.' },
+    { icon: Highlighter, title: 'Find the important parts faster.', body: 'Organize a report into a readable summary, notable terms, and points that may warrant a professional explanation.' },
+    { icon: MessageCircleQuestion, title: 'Know what you still need to ask.', body: 'Generate questions for your appointment instead of jumping to conclusions from a single number or flag.' },
+    { icon: ShieldCheck, title: 'Support for understanding. Not a diagnosis.', body: 'Clear boundaries between explanation, uncertainty, and decisions that belong with a healthcare professional.' },
   ];
 
   return (
@@ -214,7 +598,7 @@ function Features() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {features.map(({ icon: Icon, title, body }, index) => (
             <article key={title} className={`feature-panel rounded-2xl border border-ink/10 p-6 ${index === 1 ? 'bg-teal text-white' : 'bg-cream'}`}>
-              <span className={`grid h-12 w-12 place-items-center rounded-xl border ${index === 1 ? 'border-white/40 bg-lime text-ink' : 'border-ink bg-lime text-ink'}`}><Icon size={21} /></span>
+              <Icon size={42} strokeWidth={1.5} className={`shrink-0 ${index === 1 ? 'text-white' : 'text-teal'}`} />
               <h3 className="mt-7 text-lg font-black leading-tight">{title}</h3>
               <p className={`mt-3 text-sm leading-7 ${index === 1 ? 'text-white/75' : 'text-muted'}`}>{body}</p>
             </article>
@@ -227,7 +611,7 @@ function Features() {
 
 const FACTS = [
   {
-    id: 'ranges', icon: Scale, tag: 'REFERENCE RANGES', title: 'A range is not the whole story.',
+    id: 'ranges', icon: SlidersHorizontal, tag: 'REFERENCE RANGES', title: 'A range is not the whole story.',
     body: 'Reference ranges can vary by laboratory and by the method used. Read the range printed on the report instead of relying on a number seen elsewhere.',
     takeaway: 'Keep the lab’s own range beside the result.',
   },
@@ -247,12 +631,12 @@ const FACTS = [
     takeaway: 'Ask what the flag means in your situation.',
   },
   {
-    id: 'context', icon: HeartPulse, tag: 'PERSONAL CONTEXT', title: 'Context changes interpretation.',
+    id: 'context', icon: UserCheck, tag: 'PERSONAL CONTEXT', title: 'Context changes interpretation.',
     body: 'Symptoms, medicines, medical history, and other findings can all matter when a clinician interprets a result. A single value rarely tells the complete story.',
     takeaway: 'Share relevant context with your healthcare professional.',
   },
   {
-    id: 'questions', icon: MessageCircleQuestion, tag: 'YOUR APPOINTMENT', title: 'Questions are part of good care.',
+    id: 'questions', icon: MessagesSquare, tag: 'YOUR APPOINTMENT', title: 'Questions are part of good care.',
     body: 'It is reasonable to ask what a result measures, whether follow-up is needed, and how it fits with your symptoms or previous results.',
     takeaway: 'Write down questions before your appointment.',
   },
@@ -292,7 +676,7 @@ function FactCards() {
             <article key={`${id}-${shuffleCount}`} className={`fact-card group relative flex min-h-[285px] flex-col overflow-hidden rounded-2xl border border-ink/10 p-6 sm:p-7 ${index % 6 === 1 ? 'bg-teal text-white' : index % 6 === 4 ? 'bg-[#fff0eb]' : 'bg-cream'}`} style={{ animationDelay: `${index * 45}ms` }}>
               <div className="flex items-start justify-between gap-4">
                 <span className={`text-[9px] font-black uppercase tracking-[.16em] ${index % 6 === 1 ? 'text-lime' : 'text-muted'}`}>{tag}</span>
-                <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl border ${index % 6 === 1 ? 'border-white/40 bg-lime text-ink' : 'border-ink bg-lime text-ink'}`}><Icon size={21} /></span>
+                <Icon size={40} strokeWidth={1.5} className={`shrink-0 ${index % 6 === 1 ? 'text-white' : 'text-teal'}`} />
               </div>
               <h3 className="mt-8 max-w-[290px] text-[1.55rem] font-black leading-[1.04] tracking-[-.04em]">{title}</h3>
               <p className={`mt-3 text-sm leading-6 ${index % 6 === 1 ? 'text-white/75' : 'text-muted'}`}>{body}</p>
@@ -315,7 +699,7 @@ function Safety() {
     <section id="safety" className="mx-auto max-w-[1180px] px-5 py-20 sm:px-8 sm:py-24">
       <div className="grid gap-7 rounded-3xl border-2 border-ink bg-cream p-6 shadow-[0_8px_0_rgba(0,0,0,.07)] sm:p-9 lg:grid-cols-[.8fr_1.2fr] lg:items-center lg:p-12">
         <div>
-          <div className="mb-4 grid h-14 w-14 place-items-center rounded-2xl border-2 border-ink bg-lime"><ShieldCheck size={27} /></div>
+          <div className="mb-4 text-teal"><ShieldCheck size={48} strokeWidth={1.5} /></div>
           <div className="mb-3 text-[10px] font-black uppercase tracking-[.16em] text-muted">Clarity with boundaries</div>
           <h2 className="display-font text-[clamp(2.4rem,4vw,3.8rem)] uppercase leading-[.96] text-ink">Helpful by design.<br />Honest about limits.</h2>
         </div>

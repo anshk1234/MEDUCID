@@ -176,6 +176,29 @@ body {
   transform: translateY(2px);
   box-shadow: 0 1px 0 rgba(0,0,0,.12);
 }
+
+@keyframes hero-dialog-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.92) translateY(14px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.animate-hero-dialog {
+  animation: hero-dialog-in 380ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-hero-dialog {
+    animation: none;
+    transition: opacity 200ms ease;
+  }
+}
+
 @media (max-width: 640px) {
   .hero-blob { top: -330px; height: 510px; width: 180%; left: -40%; }
   .facts-blob { height: 90%; top: 5%; width: 150%; left: -25%; }
