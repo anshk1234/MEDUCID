@@ -3,10 +3,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  Activity, ArrowDownRight, ArrowRight, BookOpen, Check, CheckCircle2, ChevronDown,
-  CircleHelp, ClipboardCheck, FileSearch, FileText, FileUp, HeartPulse, Highlighter,
-  Languages, LockKeyhole, Menu, MessageCircleQuestion, MessageSquareQuote, MessagesSquare, Microscope,
-  RotateCcw, Scale, ShieldCheck, SlidersHorizontal, Sparkles, Stethoscope, TrendingUp, UserCheck, X,
+  Activity, ArrowDownRight, BookOpen, Check, CheckCircle2, ChevronDown,
+  ClipboardCheck, FileSearch, FileText, FileUp, HeartPulse, Highlighter,
+  Languages, Menu, MessageCircleQuestion, MessageSquareQuote, MessagesSquare, Microscope,
+  RotateCcw, ShieldCheck, SlidersHorizontal, Stethoscope, TrendingUp, UserCheck, X,
 } from 'lucide-react';
 
 const navItems = [
@@ -415,13 +415,9 @@ function ReportMiniCard({
 
 function Hero({ onOpenDashboard }: { onOpenDashboard: () => void }) {
   const [activeCard, setActiveCard] = useState<HeroCardData | null>(null);
-  const [mounted, setMounted] = useState(false);
   const triggerRefs = useRef<{ [key: string]: HTMLButtonElement | null }>({});
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const portalTarget = typeof document !== 'undefined' ? document.body : null;
 
   const handleClose = useCallback(() => {
     if (activeCard) {
@@ -494,7 +490,7 @@ function Hero({ onOpenDashboard }: { onOpenDashboard: () => void }) {
         </div>
       </div>
 
-      {mounted && activeCard && ActiveIcon && createPortal(
+      {portalTarget && activeCard && ActiveIcon && createPortal(
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/45 backdrop-blur-md transition-opacity duration-300"
           onClick={handleClose}
@@ -544,7 +540,7 @@ function Hero({ onOpenDashboard }: { onOpenDashboard: () => void }) {
             </div>
           </div>
         </div>,
-        document.body
+        portalTarget
       )}
     </section>
   );
