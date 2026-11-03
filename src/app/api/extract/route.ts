@@ -5,8 +5,26 @@ import { auditFactualConsistency } from '@/lib/consistencyChecker';
 import { formatStrictSummary, generateStrictNeutralQuestions } from '@/lib/simplificationEngine';
 import { extractMeasurementsFromText } from '@/lib/documentExtractor';
 import { interpretReferenceRange } from '@/lib/rangeInterpreter';
+import {
+  validateMedicalReportStructure,
+  GATEKEEPER_REJECTION_MESSAGE,
+} from '@/lib/documentGatekeeper';
 
-const SYSTEM_INSTRUCTION = `You are MEDUCID, an expert clinical AI system that extracts laboratory reports into structured findings.
+const SYSTEM_INSTRUCTION = `You are MEDUCID, an expert clinical AI system that validates and extracts laboratory reports into structured findings.
+
+MANDATORY DOCUMENT GATEKEEPER RULE:
+First, inspect the document carefully. Determine if this document is a genuine clinical laboratory report or diagnostic test panel (such as Complete Blood Count, Metabolic Panel, Urinalysis, Lipid Profile, Liver/Kidney Function, Thyroid Panel, Pathology Report, or Clinical Microbiology).
+If this document is NOT a medical laboratory report (for example: an academic assignment, homework, syllabus, invoice, shopping bill, grocery receipt, restaurant menu, resume, business document, generic essay, or non-medical photo):
+You MUST return ONLY:
+{
+  "isMedicalReport": false,
+  "rejectionReason": "This document is not a medical report, please upload a medical report",
+  "title": "Non-Medical Document",
+  "findings": []
+}
+Do NOT invent or extract findings from non-medical documents.
+
+If and only if the document is a genuine clinical medical report, set "isMedicalReport": true and follow the rules below:
 
 STRICT PRODUCT RULES (NON-NEGOTIABLE):
 1. COMPLETENESS IS MANDATORY: You MUST extract EVERY SINGLE laboratory measurement from ALL sections of the document (including Complete Blood Count, Biochemistry, Urinalysis, etc.). Never truncate, never stop after a few rows, and never omit normal or qualitative findings.
@@ -22,6 +40,7 @@ STRICT PRODUCT RULES (NON-NEGOTIABLE):
 
 OUTPUT JSON SCHEMA:
 {
+  "isMedicalReport": true,
   "title": "Report or Panel Title (e.g. Comprehensive Laboratory Report)",
   "patientDeidentifiedId": "De-identified ID or 'SYN-PT-USER'",
   "collectionDate": "Date as printed or current date",
@@ -52,7 +71,21 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { fileBase64, mimeType, rawText, fileName } = body;
 
-    // 1. If rawText is provided, run deterministic extraction baseline immediately
+    // 1. Fast deterministic gatekeeper pre-check on rawText if supplied
+    if (rawText && rawText.trim().length > 60) {
+      const gate = validateMedicalReportStructure(rawText);
+      if (!gate.isMedicalReport) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: GATEKEEPER_REJECTION_MESSAGE,
+          },
+          { status: 400 }
+        );
+      }
+    }
+
+    // 2. Deterministic baseline extraction if text is available
     let deterministicResult = rawText ? extractMeasurementsFromText(rawText) : null;
 
     const parts: GeminiContentPart[] = [];
@@ -65,7 +98,7 @@ export async function POST(req: NextRequest) {
         },
       });
       parts.push({
-        text: `Extract ALL laboratory tests across all pages and sections from this uploaded ${fileName || 'document'}. Do NOT omit any measurements. Output only valid JSON.`,
+        text: `First verify if this uploaded ${fileName || 'document'} is a clinical laboratory report. If not, reject it according to system instructions. If it is a medical lab report, extract ALL laboratory tests across all pages and sections. Output only valid JSON.`,
       });
     } else if (rawText) {
       parts.push({
@@ -94,6 +127,17 @@ export async function POST(req: NextRequest) {
       } catch {
         const cleaned = geminiRes.text.replace(/```json\n?|\n?```/g, '').trim();
         parsedJson = JSON.parse(cleaned);
+      }
+
+      // Check if Gemini identified document as non-medical report
+      if (parsedJson && parsedJson.isMedicalReport === false) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: GATEKEEPER_REJECTION_MESSAGE,
+          },
+          { status: 400 }
+        );
       }
 
       const rawFindings: any[] = parsedJson.findings || [];
@@ -160,6 +204,22 @@ export async function POST(req: NextRequest) {
       finalFindings = aiFindings;
     } else if (deterministicResult) {
       finalFindings = deterministicResult.findings;
+    }
+
+    // False Reassurance Check:
+    // If fewer than 3 findings were extracted, verify whether document has genuine clinical structure.
+    // If not, reject rather than providing false reassurance (e.g. "All 0 values are within normal limits").
+    if (finalFindings.length < 3) {
+      const structureCheck = validateMedicalReportStructure(effectiveRawText);
+      if (!structureCheck.isMedicalReport) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: GATEKEEPER_REJECTION_MESSAGE,
+          },
+          { status: 400 }
+        );
+      }
     }
 
     const summaryData = formatStrictSummary(finalFindings);

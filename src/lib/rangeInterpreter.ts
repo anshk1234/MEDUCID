@@ -39,7 +39,7 @@ export function parseNumericValue(valStr: string): number | null {
 
 /**
  * Interprets reference-range expressions against values:
- * - Closed numeric intervals: e.g. "12.0 - 15.5", "70 - 99", "4,500 - 11,000" (inclusive)
+ * - Closed numeric intervals: e.g. "12.0 - 15.5", "12.0–15.5" (en-dash), "70 - 99", "4,500 - 11,000" (inclusive)
  * - Strict less-than: e.g. "< 150" (must be strictly < 150; 150 is above range)
  * - Less-than-or-equal: e.g. "<= 5", "=< 5" (inclusive of boundary)
  * - Strict greater-than: e.g. "> 40" (must be strictly > 40; 40 is below range)
@@ -73,8 +73,28 @@ export function interpretReferenceRange(
     };
   }
 
+  // Normalize Unicode dashes, hyphens, and whitespace:
+  // - En-dash: \u2013 (–)
+  // - Em-dash: \u2014 (—)
+  // - Minus sign: \u2212 (−)
+  // - Figure dash / Horizontal bar: \u2012, \u2015
+  // - Fullwidth hyphen: \uFF0D (－)
+  // - Tilde: ~
+  // NOTE: Avoid blindly replacing leading minus signs (like '-1.0 - 1.0')
+  const normalizedRange = rangeTrimmed
+    .replace(/[\u2012\u2013\u2014\u2015\u2212\uFF0D~]/g, '-')
+    .trim();
+
+  // Strip enclosing brackets or parentheses e.g. "(12.0 - 15.5)" or "[70 - 99]"
+  // and strip any prefix like "Ref:", "Reference:", "Normal:", "Range:"
+  const cleanRange = normalizedRange
+    .replace(/^[\(\[]/, '')
+    .replace(/[\)\]]$/, '')
+    .replace(/^(?:ref(?:erence)?|normal|range)?[:\s]*/i, '')
+    .trim();
+
   // 2. Strict / Inclusive Less-Than: "<= 150", "=< 150", or "< 150"
-  const lessThanMatch = rangeTrimmed.match(/^([<]=?|=<)\s*([\d,.]+)(?:\s+[a-zA-Z/%^0-9.-]+)?$/i);
+  const lessThanMatch = cleanRange.match(/^([<]=?|=<)\s*([\d,.]+)(?:\s+[a-zA-Z/%^0-9.-]+)?$/i);
   if (lessThanMatch) {
     const isInclusive = lessThanMatch[1].includes('=');
     const bound = parseFloat(lessThanMatch[2].replace(/,/g, ''));
@@ -118,7 +138,7 @@ export function interpretReferenceRange(
   }
 
   // 3. Strict / Inclusive Greater-Than: ">= 40", "=> 40", or "> 40"
-  const greaterThanMatch = rangeTrimmed.match(/^([>]=?|=>)\s*([\d,.]+)(?:\s+[a-zA-Z/%^0-9.-]+)?$/i);
+  const greaterThanMatch = cleanRange.match(/^([>]=?|=>)\s*([\d,.]+)(?:\s+[a-zA-Z/%^0-9.-]+)?$/i);
   if (greaterThanMatch) {
     const isInclusive = greaterThanMatch[1].includes('=');
     const bound = parseFloat(greaterThanMatch[2].replace(/,/g, ''));
@@ -161,7 +181,7 @@ export function interpretReferenceRange(
   }
 
   // 4. Closed Numeric Interval: "low - high" or "low to high" (inclusive interval)
-  const intervalMatch = rangeTrimmed.match(/^(-?[\d,.]+)\s*(?:-|to)\s*(-?[\d,.]+)(?:\s+[a-zA-Z/%^0-9.-]+)?$/i);
+  const intervalMatch = cleanRange.match(/^(-?[\d,.]+)\s*(?:-|–|—|to|thru|through)\s*(-?[\d,.]+)(?:\s+[a-zA-Z/%^0-9.-]+)?$/i);
   if (intervalMatch) {
     const low = parseFloat(intervalMatch[1].replace(/,/g, ''));
     const high = parseFloat(intervalMatch[2].replace(/,/g, ''));
@@ -223,7 +243,7 @@ export function interpretReferenceRange(
 
   // 5. Qualitative Reference Range Comparison
   const valLower = valueTrimmed.toLowerCase();
-  const rangeLower = rangeTrimmed.toLowerCase();
+  const rangeLower = cleanRange.toLowerCase();
 
   const qualitativeTerms = [
     'negative',
