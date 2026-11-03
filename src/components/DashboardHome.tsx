@@ -14,7 +14,14 @@ import {
 } from 'lucide-react';
 import { SimplifiedReport } from '@/types/report';
 import { SYNTHETIC_BENCHMARKS } from '@/data/syntheticReports';
-import { validateUploadFile, prepareFileForExtraction, requestAiExtraction } from '@/lib/fileProcessor';
+import {
+  validateUploadFile,
+  prepareFileForExtraction,
+  requestAiExtraction,
+  preflightGatekeeperCheck,
+  GATEKEEPER_REJECTION_MESSAGE,
+} from '@/lib/fileProcessor';
+import { scoreDocumentStructure } from '@/lib/documentGatekeeper';
 import { parseRawReportText } from '@/lib/simplificationEngine';
 
 interface DashboardHomeProps {
@@ -43,10 +50,23 @@ export function DashboardHome({
   // Handle direct file drop or selection right from Dashboard
   const handleFile = async (file: File) => {
     setQuickValidationError(null);
+
+    // 1. File extension and size validation
     const validation = validateUploadFile(file);
     if (!validation.valid) {
       setQuickValidationError(validation.error || 'Invalid file.');
       return;
+    }
+
+    // 2. Instant preflight gatekeeper check (1-20 ms)
+    try {
+      const gateCheck = await preflightGatekeeperCheck(file);
+      if (!gateCheck.isMedicalReport) {
+        setQuickValidationError(gateCheck.error || GATEKEEPER_REJECTION_MESSAGE);
+        return;
+      }
+    } catch {
+      // Continue to extraction workflow
     }
 
     onStartProcessing(file.name);
@@ -62,20 +82,32 @@ export function DashboardHome({
         fileName: prepared.fileName,
       });
 
-      if (!aiResult.report.findings || aiResult.report.findings.length === 0) {
-        if (prepared.rawText) {
-          const parsed = parseRawReportText(prepared.rawText, file.name);
-          if (parsed.findings.length > 0) {
-            onReportLoaded(parsed, {
-              fileName: file.name,
-              fileType: prepared.fileType,
-              previewUrl: prepared.previewUrl,
-              fileBase64: prepared.fileBase64,
-            });
-            return;
-          }
+      const findings = aiResult.report.findings || [];
+      if (findings.length < 3) {
+        const docText = aiResult.report.rawText || prepared.rawText || '';
+        const structureCheck = scoreDocumentStructure(docText);
+        if (!structureCheck.isMedicalReport) {
+          onProcessingError(GATEKEEPER_REJECTION_MESSAGE);
+          return;
         }
-        onProcessingError("We couldn't find lab values in this file. Please verify the document format.");
+      }
+
+      if (findings.length === 0) {
+        if (prepared.rawText) {
+          try {
+            const parsed = parseRawReportText(prepared.rawText, file.name);
+            if (parsed.findings.length >= 3) {
+              onReportLoaded(parsed, {
+                fileName: file.name,
+                fileType: prepared.fileType,
+                previewUrl: prepared.previewUrl,
+                fileBase64: prepared.fileBase64,
+              });
+              return;
+            }
+          } catch {}
+        }
+        onProcessingError(GATEKEEPER_REJECTION_MESSAGE);
         return;
       }
 
@@ -87,10 +119,16 @@ export function DashboardHome({
       });
     } catch (err: any) {
       console.warn('AI Extraction error, checking fallback...', err);
+
+      if (err?.message === GATEKEEPER_REJECTION_MESSAGE) {
+        onProcessingError(GATEKEEPER_REJECTION_MESSAGE);
+        return;
+      }
+
       if (prepared?.rawText) {
         try {
           const parsed = parseRawReportText(prepared.rawText, file.name);
-          if (parsed.findings.length > 0) {
+          if (parsed.findings.length >= 3) {
             onReportLoaded(parsed, {
               fileName: file.name,
               fileType: prepared.fileType,
@@ -99,8 +137,11 @@ export function DashboardHome({
             });
             return;
           }
-        } catch (parseErr) {
-          console.warn('Local parser fallback error:', parseErr);
+        } catch (parseErr: any) {
+          if (parseErr?.message === GATEKEEPER_REJECTION_MESSAGE) {
+            onProcessingError(GATEKEEPER_REJECTION_MESSAGE);
+            return;
+          }
         }
       }
       onProcessingError(err.message || 'Failed to extract report data. Please try another file.');
@@ -178,50 +219,44 @@ export function DashboardHome({
               <h3 className="font-serif text-lg font-bold text-ink tracking-[-0.02em]">
                 {fileInfo?.fileName || currentReport.title || 'Laboratory Report'}
               </h3>
-              <div className="flex items-center gap-3 text-xs text-muted">
-                <span className="font-mono font-bold text-ink">
-                  {currentReport.findings.length}
-                </span>
-                <span>measurements extracted</span>
-                <span className="text-black/20">•</span>
-                <span className="font-mono font-bold text-[#9f2e1c]">
-                  {currentReport.findings.filter((f) => f.flag === 'HIGH' || f.flag === 'LOW').length}
-                </span>
-                <span>outside reference range</span>
-              </div>
+              <p className="font-sans text-xs text-muted">
+                {currentReport.findings.length} findings extracted · {currentReport.summary.outOfRangeCount} out-of-range indicators
+              </p>
             </div>
 
-            <button
-              onClick={onNavigateToSimplifier}
-              className="cta-shadow h-11 px-6 rounded-xl border-2 border-ink bg-lime text-ink text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 shrink-0 cursor-pointer"
-            >
-              <span>Resume Workspace</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={onNavigateToSimplifier}
+                className="cta-shadow h-11 px-5 rounded-xl border-2 border-ink bg-lime hover:bg-[#d5ff57] text-ink text-xs font-black uppercase tracking-wider transition-colors flex items-center gap-2 cursor-pointer"
+              >
+                <span>Resume Audit</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         )}
 
-        {/* Two Core Gateway Cards (Cream #fffefa, Crisp 1.5px border, Recessed #eeede6 Ledgers) */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        {/* Two-Column Feature Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           
           {/* Card 1: Report Simplifier */}
           <div className="bg-cream border-2 border-ink/15 rounded-2xl p-6 sm:p-8 shadow-[0_5px_0_rgba(20,20,20,.05)] flex flex-col justify-between space-y-6">
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <div className="w-12 h-12 rounded-xl bg-lime border-2 border-ink flex items-center justify-center text-ink shadow-[0_2px_0_rgba(0,0,0,.1)]">
+                <div className="w-12 h-12 rounded-xl bg-lime border-2 border-ink flex items-center justify-center text-ink shadow-xs">
                   <FileText className="w-6 h-6" />
                 </div>
-                <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-[#3d5d04] bg-[#e7f8b9] border border-[#6a8e0c]/40 px-2.5 py-1 rounded-full font-bold">
-                  Active System
+                <span className="font-mono text-[11px] uppercase tracking-[0.05em] text-ink bg-lime border border-ink px-2.5 py-1 rounded-full font-black">
+                  Core Engine Active
                 </span>
               </div>
 
               <div>
                 <h2 className="font-serif text-2xl font-bold tracking-[-0.02em] text-ink leading-tight">
-                  Report Simplifier
+                  Single-Report Simplifier
                 </h2>
                 <p className="font-sans text-sm text-muted mt-2 leading-relaxed">
-                  Upload laboratory documents in PDF, TXT, or scan formats. Ingests Complete Blood Count, Biochemistry, and Urinalysis measurements with zero silent discards and side-by-side verification.
+                  Extract complete panels across all pages without omission. Read side-by-side verification with source line coordinates and deterministic high/low bounds.
                 </p>
               </div>
 

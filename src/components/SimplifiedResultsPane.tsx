@@ -237,19 +237,35 @@ export function SimplifiedResultsPane({
           {/* Header line */}
           <div className="text-xs font-medium text-[#171717] tracking-tight flex items-center gap-2">
             {report.summary.outOfRangeCount > 0 ? (
-              <span className="inline-flex items-center gap-1.5 text-[#B45309] bg-[#FFFBEB] px-2.5 py-1 rounded-md border border-[#FDE68A] font-mono text-xs font-semibold">
-                <AlertTriangle className="w-3.5 h-3.5 text-[#B45309]" />
-                {report.summary.outOfRangeCount} of {report.summary.totalWithNumericRange} values
-              </span>
+              <>
+                <span className="inline-flex items-center gap-1.5 text-[#B45309] bg-[#FFFBEB] px-2.5 py-1 rounded-md border border-[#FDE68A] font-mono text-xs font-semibold">
+                  <AlertTriangle className="w-3.5 h-3.5 text-[#B45309]" />
+                  {report.summary.outOfRangeCount} of {report.summary.totalWithNumericRange} values
+                </span>
+                <span className="font-sans text-[#525252]">
+                  with a printed numeric range are outside it ({report.summary.noNumericRangeCount} have no numeric range)
+                </span>
+              </>
+            ) : report.summary.totalWithNumericRange > 0 ? (
+              <>
+                <span className="inline-flex items-center gap-1.5 text-[#047857] bg-[#ECFDF5] px-2.5 py-1 rounded-md border border-[#A7F3D0] font-mono text-xs font-semibold">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-[#047857]" />
+                  All {report.summary.totalWithNumericRange} values
+                </span>
+                <span className="font-sans text-[#525252]">
+                  with a printed numeric range are within it ({report.summary.noNumericRangeCount} have no numeric range)
+                </span>
+              </>
             ) : (
-              <span className="inline-flex items-center gap-1.5 text-[#047857] bg-[#ECFDF5] px-2.5 py-1 rounded-md border border-[#A7F3D0] font-mono text-xs font-semibold">
-                <CheckCircle2 className="w-3.5 h-3.5 text-[#047857]" />
-                All {report.summary.totalWithNumericRange} values
-              </span>
+              <>
+                <span className="inline-flex items-center gap-1.5 text-slate-600 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200 font-mono text-xs font-semibold">
+                  {report.summary.totalTests} tests
+                </span>
+                <span className="font-sans text-[#525252]">
+                  have no printed numeric range
+                </span>
+              </>
             )}
-            <span className="font-sans text-[#525252]">
-              with a printed numeric range are outside it ({report.summary.noNumericRangeCount} have no numeric range)
-            </span>
           </div>
 
           {/* Search Input */}

@@ -1,5 +1,12 @@
 import { SimplifiedReport } from '@/types/report';
 import { getOrCreateSessionId } from './sessionState';
+import {
+  validateMagicBytes,
+  validateMedicalReportStructure,
+  GATEKEEPER_REJECTION_MESSAGE,
+} from './documentGatekeeper';
+
+export { GATEKEEPER_REJECTION_MESSAGE };
 
 export const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
 export const MAX_PDF_PAGES = 10;
@@ -112,6 +119,65 @@ export function validateUploadFile(file: File): FileValidationResult {
 }
 
 /**
+ * Fast synchronous/asynchronous pre-flight gatekeeper check (executes in 1-20 milliseconds).
+ * Confirms real magic bytes and inspects digital text for clinical lab structure before starting UI processing.
+ */
+export async function preflightGatekeeperCheck(
+  file: File
+): Promise<{ isMedicalReport: boolean; error?: string; rawText?: string }> {
+  // 1. Magic bytes header inspection (~1 ms)
+  try {
+    const slice = file.slice(0, 64);
+    const buffer = await slice.arrayBuffer();
+    const magic = validateMagicBytes(new Uint8Array(buffer));
+    if (!magic.valid) {
+      return { isMedicalReport: false, error: GATEKEEPER_REJECTION_MESSAGE };
+    }
+  } catch {
+    // Continue if slice is unavailable in environment
+  }
+
+  const nameLower = file.name.toLowerCase();
+
+  // 2. Direct Text File Inspection (~1 ms)
+  if (nameLower.endsWith('.txt')) {
+    try {
+      const text = await file.text();
+      const gate = validateMedicalReportStructure(text);
+      if (!gate.isMedicalReport) {
+        return { isMedicalReport: false, error: GATEKEEPER_REJECTION_MESSAGE, rawText: text };
+      }
+      return { isMedicalReport: true, rawText: text };
+    } catch {
+      return { isMedicalReport: false, error: GATEKEEPER_REJECTION_MESSAGE };
+    }
+  }
+
+  // 3. Digital PDF Text Layer Inspection (~10-30 ms)
+  if (nameLower.endsWith('.pdf')) {
+    try {
+      const text = await extractPdfText(file);
+      // If the PDF contains a digital text stream (> 80 chars), we can validate in milliseconds
+      if (text && text.trim().length > 80) {
+        const gate = validateMedicalReportStructure(text);
+        if (!gate.isMedicalReport) {
+          return { isMedicalReport: false, error: GATEKEEPER_REJECTION_MESSAGE, rawText: text };
+        }
+        return { isMedicalReport: true, rawText: text };
+      }
+      // If text is minimal or empty, it is likely a scanned image PDF requiring OCR/AI
+      return { isMedicalReport: true, rawText: text || undefined };
+    } catch {
+      // Proceed to server extraction if local PDF parsing throws
+      return { isMedicalReport: true };
+    }
+  }
+
+  // Images and DOCX require OCR / vision model classification on the server
+  return { isMedicalReport: true };
+}
+
+/**
  * Converts File to Base64 data string (without prefix)
  */
 export function fileToBase64(file: File): Promise<string> {
@@ -170,7 +236,9 @@ export async function extractPdfText(file: File | ArrayBuffer): Promise<string> 
           }
           if (bucket === null) {
             bucket = y;
-            lineMap.set(y, []);
+          }
+          if (!lineMap.has(bucket)) {
+            lineMap.set(bucket, []);
           }
           lineMap.get(bucket)!.push({ str: item.str, x, width });
         }
@@ -248,6 +316,10 @@ export async function prepareFileForExtraction(file: File): Promise<PreparedUplo
   // 1. Text Files (.txt)
   if (nameLower.endsWith('.txt')) {
     const text = await file.text();
+    const gate = validateMedicalReportStructure(text);
+    if (!gate.isMedicalReport) {
+      throw new Error(GATEKEEPER_REJECTION_MESSAGE);
+    }
     return {
       fileName: file.name,
       fileType: 'text',
@@ -259,13 +331,23 @@ export async function prepareFileForExtraction(file: File): Promise<PreparedUplo
   // 2. PDF Files (.pdf)
   if (nameLower.endsWith('.pdf')) {
     const fileBase64 = await fileToBase64(file);
-    const previewUrl = URL.createObjectURL(file);
+    const previewUrl = typeof window !== 'undefined' ? URL.createObjectURL(file) : undefined;
     let rawText: string | undefined;
     try {
       rawText = (await extractPdfText(file)) || undefined;
     } catch (e) {
       console.warn('PDF text extraction error, proceeding with binary/AI fallback:', e);
     }
+
+    // Instant digital gatekeeper: If the PDF contained selectable text (> 80 chars),
+    // evaluate its medical report structure in 1-5ms.
+    if (rawText && rawText.trim().length > 80) {
+      const gate = validateMedicalReportStructure(rawText);
+      if (!gate.isMedicalReport) {
+        throw new Error(GATEKEEPER_REJECTION_MESSAGE);
+      }
+    }
+
     return {
       fileName: file.name,
       fileType: 'pdf',
@@ -285,7 +367,7 @@ export async function prepareFileForExtraction(file: File): Promise<PreparedUplo
     nameLower.endsWith('.heic')
   ) {
     const fileBase64 = await fileToBase64(file);
-    const previewUrl = URL.createObjectURL(file);
+    const previewUrl = typeof window !== 'undefined' ? URL.createObjectURL(file) : undefined;
     let mimeType = file.type || 'image/png';
     if (nameLower.endsWith('.jpg') || nameLower.endsWith('.jpeg')) mimeType = 'image/jpeg';
     if (nameLower.endsWith('.webp')) mimeType = 'image/webp';

@@ -294,12 +294,16 @@ export function formatStrictSummary(findings: MedicalFinding[]): {
   const sentence1 = `This report contains ${totalTests} extracted measurements.`;
   const sentence2 = outsideRangeCount > 0
     ? `${outsideRangeCount} of ${totalWithNumericRange} values with a printed numeric range are outside it: ${outList}.`
-    : `All ${totalWithNumericRange} values with a printed numeric range are within it.`;
+    : (totalWithNumericRange > 0
+        ? `All ${totalWithNumericRange} values with a printed numeric range are within it.`
+        : `No values with printed numeric ranges were detected.`);
   const sentence3 = `${withinRangeCount} values are within their printed numeric ranges, and ${noNumericRangeCount} have no numeric range printed.`;
   const sentence4 = `Clinical interpretation belongs to a qualified professional.`;
 
   const overview = `${sentence1} ${sentence2} ${sentence3} ${sentence4}`;
-  const keyTakeaway = `${outsideRangeCount} of ${totalWithNumericRange} values with a printed numeric range are outside it (${noNumericRangeCount} have no numeric range).`;
+  const keyTakeaway = totalWithNumericRange > 0
+    ? `${outsideRangeCount} of ${totalWithNumericRange} values with a printed numeric range are outside it (${noNumericRangeCount} have no numeric range).`
+    : `No values with printed numeric ranges were detected.`;
 
   return {
     overview,

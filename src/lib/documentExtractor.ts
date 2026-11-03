@@ -21,7 +21,9 @@ const SECTION_PATTERNS: Array<{ regex: RegExp; name: string }> = [
 // Document metadata or table header rows that should be skipped as candidate finding lines
 const IGNORE_LINE_PATTERNS: RegExp[] = [
   /^[-=_]{3,}$/,
-  /^(patient|physician|doctor|hospital|clinic|specimen|collection|accession|account|dob|age|sex|gender|date|phone|address|page\s+\d+|report\s+date|status:|sample|collected|received|reported)/i,
+  /^(patient|physician|doctor|referring|clinician|hospital|clinic|specimen|collection|accession|account|dob|age|sex|gender|date|phone|address|page\s+\d+|report\s+date|status:|sample|collected|received|reported)/i,
+  /\b(referring clinician|ordering doctor|authorized signatory|laboratory seal|results are reported as measured|intended only for software testing)\b/i,
+  /\bpage\s+\d+\b/i,
   /^(test\s+name|analyte|investigation|parameter|description)\b/i,
   /^(end of report|notes?:|comments?:|method:|instrument:|verified by|electronic signature|lab director|pathologist|license|inquiries)/i,
   /^metro health|apex diagnostic|city clinical|metropolitan lab|diagnostic laboratory/i,
@@ -296,7 +298,7 @@ export function parseMeasurementLine(line: string): LineParseResult {
 
         // Check if cols[2] looks like a reference range (contains '-', '<', '>', or matches value, or qualitative)
         const isCol2Range =
-          /[-<>]/.test(cols[2]) ||
+          /[-–—−~<>]/.test(cols[2]) ||
           cols[2].toLowerCase() === value.toLowerCase() ||
           /^(negative|positive|normal|clear|pale yellow)$/i.test(cols[2]);
 
@@ -318,7 +320,7 @@ export function parseMeasurementLine(line: string): LineParseResult {
         const isLastFlag = /^(HIGH|LOW|NORMAL|ALERT|ABNORMAL|CRITICAL|H|L)$/.test(lastColUpper);
         if (isLastFlag) {
           flag = lastColUpper;
-        } else if (/[-<>]/.test(cols[2]) || /^(negative|positive|normal|clear)$/i.test(cols[2])) {
+        } else if (/[-–—−~<>]/.test(cols[2]) || /^(negative|positive|normal|clear)$/i.test(cols[2])) {
           range = cols[2];
         } else {
           unit = cols[2];
@@ -356,7 +358,7 @@ export function parseMeasurementLine(line: string): LineParseResult {
   // Look for reference range token at end of line:
   // - Numeric ranges (e.g. "12.0 - 16.0", "4,500 - 11,000", "< 150", ">= 10") with optional unit
   // - Qualitative ranges ("Negative", "Normal", "Clear", "Pale Yellow")
-  const rangePattern = /(?:(\b\d+(?:,\d+)*(?:\.\d+)?\s*-\s*\d+(?:,\d+)*(?:\.\d+)?\b|[<>]=?\s*[\d,.]+)(?:\s+[a-zA-Z/%^0-9.-]+)?|\b(negative|positive|non-reactive|normal|clear|pale yellow))\s*$/i;
+  const rangePattern = /(?:(\b\d+(?:,\d+)*(?:\.\d+)?\s*[-–—−~]\s*\d+(?:,\d+)*(?:\.\d+)?\b|[<>]=?\s*[\d,.]+)(?:\s+[a-zA-Z/%^0-9.-]+)?|\b(negative|positive|non-reactive|normal|clear|pale yellow))\s*$/i;
   const rangeMatch = lineToProcess.match(rangePattern);
 
   if (rangeMatch && rangeMatch.index !== undefined && rangeMatch.index > 3) {

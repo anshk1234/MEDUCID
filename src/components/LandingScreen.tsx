@@ -2,7 +2,14 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Upload, FileText, ChevronDown, Camera, AlertCircle, Sparkles } from 'lucide-react';
-import { validateUploadFile, prepareFileForExtraction, requestAiExtraction } from '@/lib/fileProcessor';
+import {
+  validateUploadFile,
+  prepareFileForExtraction,
+  requestAiExtraction,
+  preflightGatekeeperCheck,
+  GATEKEEPER_REJECTION_MESSAGE,
+} from '@/lib/fileProcessor';
+import { scoreDocumentStructure } from '@/lib/documentGatekeeper';
 import { SYNTHETIC_BENCHMARKS } from '@/data/syntheticReports';
 import { SimplifiedReport } from '@/types/report';
 import { parseRawReportText } from '@/lib/simplificationEngine';
@@ -72,10 +79,24 @@ export function LandingScreen({
 
   const handleSelectedFile = async (file: File) => {
     setValidationError(null);
+
+    // 1. Extension and size validation (~1 ms)
     const validation = validateUploadFile(file);
     if (!validation.valid) {
       setValidationError(validation.error || 'Invalid file.');
       return;
+    }
+
+    // 2. Preflight Gatekeeper Check: Magic bytes and digital text structure (~1-20 ms)
+    // Senses non-medical documents (assignments, syllabi, bills, receipts) in milliseconds before triggering UI transitions
+    try {
+      const gateCheck = await preflightGatekeeperCheck(file);
+      if (!gateCheck.isMedicalReport) {
+        setValidationError(gateCheck.error || GATEKEEPER_REJECTION_MESSAGE);
+        return;
+      }
+    } catch {
+      // Continue to extraction workflow if preflight check encounters an environment issue
     }
 
     onStartProcessing(file.name);
@@ -93,22 +114,35 @@ export function LandingScreen({
         fileName: prepared.fileName,
       });
 
-      if (!aiResult.report.findings || aiResult.report.findings.length === 0) {
-        // If AI returned 0 findings but we have rawText, parse locally
+      // Post-extraction gatekeeper check: Ensure valid medical findings exist
+      const findings = aiResult.report.findings || [];
+      if (findings.length < 3) {
+        const docText = aiResult.report.rawText || prepared.rawText || '';
+        const structureCheck = scoreDocumentStructure(docText);
+        if (!structureCheck.isMedicalReport) {
+          onProcessingError(GATEKEEPER_REJECTION_MESSAGE);
+          return;
+        }
+      }
+
+      if (findings.length === 0) {
+        // If AI returned 0 findings but we have rawText, check local fallback
         if (prepared.rawText) {
-          const parsed = parseRawReportText(prepared.rawText, file.name);
-          if (parsed.findings.length > 0) {
-            onReportLoaded(parsed, {
-              fileName: file.name,
-              fileType: prepared.fileType,
-              previewUrl: prepared.previewUrl,
-              fileBase64: prepared.fileBase64,
-            });
-            return;
-          }
+          try {
+            const parsed = parseRawReportText(prepared.rawText, file.name);
+            if (parsed.findings.length >= 3) {
+              onReportLoaded(parsed, {
+                fileName: file.name,
+                fileType: prepared.fileType,
+                previewUrl: prepared.previewUrl,
+                fileBase64: prepared.fileBase64,
+              });
+              return;
+            }
+          } catch {}
         }
 
-        onProcessingError("We couldn't find lab values in this file. Please verify the document format.");
+        onProcessingError(GATEKEEPER_REJECTION_MESSAGE);
         return;
       }
 
@@ -121,11 +155,17 @@ export function LandingScreen({
     } catch (err: any) {
       console.warn('AI Extraction error, checking fallback...', err);
 
+      // If explicit gatekeeper rejection was returned by the API or pre-processor, show it directly
+      if (err?.message === GATEKEEPER_REJECTION_MESSAGE) {
+        onProcessingError(GATEKEEPER_REJECTION_MESSAGE);
+        return;
+      }
+
       // Robust client fallback for ANY file with extracted text (TXT or PDF)
       if (prepared?.rawText) {
         try {
           const parsed = parseRawReportText(prepared.rawText, file.name);
-          if (parsed.findings.length > 0) {
+          if (parsed.findings.length >= 3) {
             onReportLoaded(parsed, {
               fileName: file.name,
               fileType: prepared.fileType,
@@ -134,24 +174,12 @@ export function LandingScreen({
             });
             return;
           }
-        } catch (parseErr) {
-          console.warn('Local parser fallback error:', parseErr);
-        }
-      }
-
-      // If text file (.txt) and prepareFileForExtraction had an issue, read text directly:
-      if (file.name.toLowerCase().endsWith('.txt')) {
-        try {
-          const directText = await file.text();
-          const parsed = parseRawReportText(directText, file.name);
-          if (parsed.findings.length > 0) {
-            onReportLoaded(parsed, {
-              fileName: file.name,
-              fileType: 'text',
-            });
+        } catch (parseErr: any) {
+          if (parseErr?.message === GATEKEEPER_REJECTION_MESSAGE) {
+            onProcessingError(GATEKEEPER_REJECTION_MESSAGE);
             return;
           }
-        } catch {}
+        }
       }
 
       onProcessingError(err?.message || 'Failed to extract values from file.');
@@ -165,6 +193,14 @@ export function LandingScreen({
     }
 
     setValidationError(null);
+
+    // Instant gatekeeper validation for pasted text (1-5 ms)
+    const gateCheck = scoreDocumentStructure(text);
+    if (!gateCheck.isMedicalReport) {
+      setValidationError(GATEKEEPER_REJECTION_MESSAGE);
+      return;
+    }
+
     onStartProcessing(title);
     setIsPasteModalOpen(false);
 
@@ -175,22 +211,26 @@ export function LandingScreen({
         fileName: title,
       });
 
-      if (aiResult.report.findings.length > 0) {
+      if (aiResult.report.findings.length >= 3) {
         onReportLoaded(aiResult.report, {
           fileName: title,
           fileType: 'text',
         });
         return;
       }
-    } catch (e) {
+    } catch (e: any) {
+      if (e?.message === GATEKEEPER_REJECTION_MESSAGE) {
+        onProcessingError(GATEKEEPER_REJECTION_MESSAGE);
+        return;
+      }
       console.warn('Gemini AI paste extraction failed, trying local engine...', e);
     }
 
     // Local deterministic engine fallback
     try {
       const parsed = parseRawReportText(text, title);
-      if (parsed.findings.length === 0) {
-        onProcessingError("We couldn't find lab values in the pasted text.");
+      if (parsed.findings.length < 3) {
+        onProcessingError(GATEKEEPER_REJECTION_MESSAGE);
         return;
       }
       onReportLoaded(parsed, {
@@ -198,7 +238,7 @@ export function LandingScreen({
         fileType: 'text',
       });
     } catch (err: any) {
-      onProcessingError(err?.message || 'Failed to parse text report.');
+      onProcessingError(err?.message || GATEKEEPER_REJECTION_MESSAGE);
     }
   };
 
