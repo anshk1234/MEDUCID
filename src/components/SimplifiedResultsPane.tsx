@@ -326,6 +326,19 @@ export function SimplifiedResultsPane({
             </button>
           </div>
 
+          {/* Download action button on Overview mode */}
+          {activeTab === 'overview' && onDownloadPdf && (
+            <button
+              type="button"
+              onClick={onDownloadPdf}
+              title="Download 3-page structured simplified report PDF"
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-[8px] bg-white hover:bg-[#F3F1EB] border border-[#E7E4DC] text-xs font-semibold text-[#171717] shadow-xs cursor-pointer transition-colors"
+            >
+              <Download className="w-3.5 h-3.5 text-teal-800" />
+              <span>Download PDF Report</span>
+            </button>
+          )}
+
           {/* Filter Chips (Active on All results tab) */}
           {activeTab === 'results' && (
             <div className="flex items-center gap-1.5 text-xs font-mono flex-wrap">
@@ -385,26 +398,13 @@ export function SimplifiedResultsPane({
           <div className="space-y-8 animate-in fade-in duration-100">
             {/* 1. Key Findings: One compact card per outside-range value */}
             <section className="space-y-4">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center justify-between">
                 <h3 className="font-serif text-lg font-semibold tracking-[-0.02em] text-[#171717]">
                   Key Findings (Outside Printed Reference Range)
                 </h3>
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-[11px] text-slate-400">
-                    {outOfRangeFindings.length} flagged
-                  </span>
-                  {onDownloadPdf && (
-                    <button
-                      type="button"
-                      onClick={onDownloadPdf}
-                      title="Download 3-page simplified report PDF"
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white hover:bg-slate-50 border border-slate-300 text-xs font-semibold text-slate-800 shadow-xs cursor-pointer transition-colors"
-                    >
-                      <Download className="w-3.5 h-3.5 text-teal-800" />
-                      <span>Download PDF Report</span>
-                    </button>
-                  )}
-                </div>
+                <span className="font-mono text-[11px] text-slate-400">
+                  {outOfRangeFindings.length} flagged
+                </span>
               </div>
 
               {outOfRangeFindings.length > 0 ? (
