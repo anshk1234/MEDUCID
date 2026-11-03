@@ -1,6 +1,4 @@
 import { describe, it, expect } from 'vitest';
-import * as fs from 'fs';
-import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { extractMeasurementsFromText } from '../src/lib/documentExtractor';
 import { formatStrictSummary } from '../src/lib/simplificationEngine';
 import { interpretReferenceRange } from '../src/lib/rangeInterpreter';
