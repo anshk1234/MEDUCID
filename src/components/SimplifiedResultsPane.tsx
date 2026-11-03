@@ -15,7 +15,8 @@ import {
   ChevronDown, 
   ChevronUp, 
   Info,
-  HelpCircle 
+  HelpCircle,
+  Download 
 } from 'lucide-react';
 import { SimplifiedReport, MedicalFinding } from '@/types/report';
 import { CompactRangeBar } from './CompactRangeBar';
@@ -32,6 +33,7 @@ interface SimplifiedResultsPaneProps {
   onSaveFinding: (updated: MedicalFinding) => void;
   onRevertFinding: (findingId: string) => void;
   onAddRow: (newFinding: MedicalFinding) => void;
+  onDownloadPdf?: () => void;
 }
 
 export function SimplifiedResultsPane({
@@ -43,6 +45,7 @@ export function SimplifiedResultsPane({
   onSaveFinding,
   onRevertFinding,
   onAddRow,
+  onDownloadPdf,
 }: SimplifiedResultsPaneProps) {
   const [activeTab, setActiveTab] = useState<'overview' | 'results' | 'questions'>('overview');
   const [filterMode, setFilterMode] = useState<'all' | 'flagged' | 'within' | 'no_numeric'>('all');
@@ -322,6 +325,19 @@ export function SimplifiedResultsPane({
               </span>
             </button>
           </div>
+
+          {/* Download action button on Overview mode */}
+          {activeTab === 'overview' && onDownloadPdf && (
+            <button
+              type="button"
+              onClick={onDownloadPdf}
+              title="Download 3-page structured simplified report PDF"
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-[8px] bg-white hover:bg-[#F3F1EB] border border-[#E7E4DC] text-xs font-semibold text-[#171717] shadow-xs cursor-pointer transition-colors"
+            >
+              <Download className="w-3.5 h-3.5 text-teal-800" />
+              <span>Download PDF Report</span>
+            </button>
+          )}
 
           {/* Filter Chips (Active on All results tab) */}
           {activeTab === 'results' && (
