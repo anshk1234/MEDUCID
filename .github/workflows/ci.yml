@@ -1,0 +1,75 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # 1. Secret & API Key Leak Prevention (Crucial for Open Source)
+  security-audit:
+    name: Secret Leak Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: TruffleHog Secret Scanner
+        uses: trufflesecurity/trufflehog@main
+        with:
+          extra_args: --only-verified
+
+  # 2. Quality, Unit Tests, and Production Build
+  quality-and-build:
+    name: Tests & Production Build
+    runs-on: ubuntu-latest
+    env:
+      NEXT_TELEMETRY_DISABLED: 1
+      CI: true
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      # 5. Fast Caching (Speed Optimization for Next.js)
+      - name: Cache Next.js Build Artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.npm
+            ${{ github.workspace }}/.next/cache
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json') }}-${{ hashFiles('**.[jt]s', '**.[jt]sx') }}
+          restore-keys: |
+            ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json') }}-
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript Type Check
+        run: npx tsc --noEmit
+
+      # 3. Code Quality & Linting
+      - name: Code Quality & Linting (ESLint)
+        run: npm run lint
+        continue-on-error: true
+
+      # Unit Tests (All 64 clinical tests: gatekeeper, range parser, factual consistency)
+      - name: Run Unit Tests
+        run: npm test
+
+      # Production Build Verification (Ensures Next.js compiles cleanly)
+      - name: Production Build Check
+        run: npm run build
