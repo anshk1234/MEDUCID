@@ -14,6 +14,7 @@ import {
 import { SimplifiedReport, MedicalFinding } from '@/types/report';
 import { OriginalReportPane } from './OriginalReportPane';
 import { SimplifiedResultsPane } from './SimplifiedResultsPane';
+import { downloadSimplifiedReportPdf } from '@/lib/pdfReportGenerator';
 
 interface SplitScreenWorkspaceProps {
   report: SimplifiedReport;
@@ -45,6 +46,7 @@ export function SplitScreenWorkspace({
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [isSavingToTracker, setIsSavingToTracker] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
 
   // Responsive tab view under 1100px: [Report | Results]
   const [responsiveTab, setResponsiveTab] = useState<'report' | 'results'>('results');
@@ -110,6 +112,20 @@ export function SplitScreenWorkspace({
       alert('Error connecting to Cloudflare D1.');
     } finally {
       setIsSavingToTracker(false);
+    }
+  };
+
+  const handleDownloadPdf = async () => {
+    setIsDownloadingPdf(true);
+    try {
+      await downloadSimplifiedReportPdf(report, {
+        fileName: fileInfo?.fileName,
+      });
+    } catch (err) {
+      console.error('PDF export error:', err);
+      alert('Could not generate PDF. Please try again.');
+    } finally {
+      setIsDownloadingPdf(false);
     }
   };
 
@@ -266,6 +282,7 @@ export function SplitScreenWorkspace({
             onSaveFinding={onSaveFinding}
             onRevertFinding={onRevertFinding}
             onAddRow={onAddRow}
+            onDownloadPdf={handleDownloadPdf}
           />
         </div>
       </div>

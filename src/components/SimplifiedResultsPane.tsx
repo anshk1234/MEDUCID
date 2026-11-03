@@ -15,7 +15,8 @@ import {
   ChevronDown, 
   ChevronUp, 
   Info,
-  HelpCircle 
+  HelpCircle,
+  Download 
 } from 'lucide-react';
 import { SimplifiedReport, MedicalFinding } from '@/types/report';
 import { CompactRangeBar } from './CompactRangeBar';
@@ -32,6 +33,7 @@ interface SimplifiedResultsPaneProps {
   onSaveFinding: (updated: MedicalFinding) => void;
   onRevertFinding: (findingId: string) => void;
   onAddRow: (newFinding: MedicalFinding) => void;
+  onDownloadPdf?: () => void;
 }
 
 export function SimplifiedResultsPane({
@@ -43,6 +45,7 @@ export function SimplifiedResultsPane({
   onSaveFinding,
   onRevertFinding,
   onAddRow,
+  onDownloadPdf,
 }: SimplifiedResultsPaneProps) {
   const [activeTab, setActiveTab] = useState<'overview' | 'results' | 'questions'>('overview');
   const [filterMode, setFilterMode] = useState<'all' | 'flagged' | 'within' | 'no_numeric'>('all');
@@ -382,13 +385,26 @@ export function SimplifiedResultsPane({
           <div className="space-y-8 animate-in fade-in duration-100">
             {/* 1. Key Findings: One compact card per outside-range value */}
             <section className="space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
                 <h3 className="font-serif text-lg font-semibold tracking-[-0.02em] text-[#171717]">
                   Key Findings (Outside Printed Reference Range)
                 </h3>
-                <span className="font-mono text-[11px] text-slate-400">
-                  {outOfRangeFindings.length} flagged
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-[11px] text-slate-400">
+                    {outOfRangeFindings.length} flagged
+                  </span>
+                  {onDownloadPdf && (
+                    <button
+                      type="button"
+                      onClick={onDownloadPdf}
+                      title="Download 3-page simplified report PDF"
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white hover:bg-slate-50 border border-slate-300 text-xs font-semibold text-slate-800 shadow-xs cursor-pointer transition-colors"
+                    >
+                      <Download className="w-3.5 h-3.5 text-teal-800" />
+                      <span>Download PDF Report</span>
+                    </button>
+                  )}
+                </div>
               </div>
 
               {outOfRangeFindings.length > 0 ? (
