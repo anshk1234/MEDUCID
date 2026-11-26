@@ -56,6 +56,7 @@ export function ReportTrackerDashboard({ onSwitchToSimplifier }: ReportTrackerDa
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [isLoadingData, setIsLoadingData] = useState(false);
+  const [trendsError, setTrendsError] = useState<string | null>(null);
   const [reports, setReports] = useState<HistoricalReport[]>([]);
   const [trends, setTrends] = useState<TrendMetric[]>([]);
   const [selectedMetric, setSelectedMetric] = useState<string>('');
@@ -85,8 +86,20 @@ export function ReportTrackerDashboard({ onSwitchToSimplifier }: ReportTrackerDa
     }
   };
 
+  const applyTrends = (loadedTrends: TrendMetric[]) => {
+    setTrends(loadedTrends);
+    if (loadedTrends.length > 0) {
+      setSelectedMetric((prev) =>
+        loadedTrends.some((t) => t.name === prev) ? prev : loadedTrends[0].name
+      );
+    } else {
+      setSelectedMetric('');
+    }
+  };
+
   const loadUserData = async () => {
     setIsLoadingData(true);
+    setTrendsError(null);
     try {
       const [repRes, trRes] = await Promise.all([
         fetch('/api/tracker/reports'),
@@ -100,18 +113,13 @@ export function ReportTrackerDashboard({ onSwitchToSimplifier }: ReportTrackerDa
 
       if (trRes.ok) {
         const trData = await trRes.json();
-        const loadedTrends: TrendMetric[] = trData.trends || [];
-        setTrends(loadedTrends);
-        if (loadedTrends.length > 0) {
-          setSelectedMetric((prev) =>
-            loadedTrends.some((t) => t.name === prev) ? prev : loadedTrends[0].name
-          );
-        } else {
-          setSelectedMetric('');
-        }
+        applyTrends(trData.trends || []);
+      } else {
+        setTrendsError('Failed to load biomarker trajectories. Please try again.');
       }
     } catch (err) {
       console.warn('Error loading D1 data:', err);
+      setTrendsError('Failed to load biomarker trajectories. Please try again.');
     } finally {
       setIsLoadingData(false);
     }
@@ -165,9 +173,10 @@ export function ReportTrackerDashboard({ onSwitchToSimplifier }: ReportTrackerDa
         const trRes = await fetch('/api/tracker/trends');
         if (trRes.ok) {
           const trData = await trRes.json();
-          if (trData.trends && trData.trends.length > 0) {
-            setTrends(trData.trends);
-          }
+          setTrendsError(null);
+          applyTrends(trData.trends || []);
+        } else {
+          setTrendsError('Failed to refresh biomarker trajectories. Please try again.');
         }
       }
     } catch (err) {
@@ -465,6 +474,17 @@ export function ReportTrackerDashboard({ onSwitchToSimplifier }: ReportTrackerDa
                   </div>
                 ))}
               </div>
+            </div>
+          ) : trendsError ? (
+            <div className="bg-[#ffe0d8]/60 border border-[#ff593e]/30 rounded-xl p-8 text-center space-y-3">
+              <p className="text-xs font-mono text-[#9f2e1c] font-bold">{trendsError}</p>
+              <button
+                onClick={loadUserData}
+                className="h-9 px-4 rounded-lg border-2 border-ink bg-cream hover:bg-[#eeede6] text-ink text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Retry</span>
+              </button>
             </div>
           ) : !activeMetric ? (
             <div className="bg-[#eeede6] border border-[#d7d6cf] rounded-xl p-8 text-center text-xs font-mono text-muted">

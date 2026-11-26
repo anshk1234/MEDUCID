@@ -41,8 +41,9 @@ export async function GET() {
     }>();
 
     for (const r of rows) {
-      if (!metricMap.has(r.test_name)) {
-        metricMap.set(r.test_name, {
+      let metric = metricMap.get(r.test_name);
+      if (!metric) {
+        metric = {
           name: r.test_name,
           unit: r.unit,
           range: r.reference_range,
@@ -50,9 +51,17 @@ export async function GET() {
           rangeHigh: r.range_high ?? null,
           description: `Longitudinal measurements for ${r.test_name}.`,
           points: [],
-        });
+        };
+        metricMap.set(r.test_name, metric);
+      } else if (r.range_low !== null || r.range_high !== null) {
+        // Use the latest row that supplies numeric bounds so earlier null bounds don't stick
+        metric.rangeLow = r.range_low ?? null;
+        metric.rangeHigh = r.range_high ?? null;
+        if (r.reference_range) {
+          metric.range = r.reference_range;
+        }
       }
-      metricMap.get(r.test_name)!.points.push({
+      metric.points.push({
         date: r.collection_date || 'Visit',
         value: r.numeric_value!,
         flag: r.flag || 'NORMAL',

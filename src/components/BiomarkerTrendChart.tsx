@@ -41,10 +41,17 @@ function parseBoundsFromRange(
   return { low, high };
 }
 
-function formatTick(val: number): string {
-  if (Math.abs(val) >= 100) return Math.round(val).toString();
-  if (Number.isInteger(val)) return val.toString();
-  return val.toFixed(1);
+function formatTick(val: number, tickStep: number): string {
+  const safeVal = Math.abs(val) < 1e-9 ? 0 : val;
+  if (tickStep > 0 && tickStep < 1) {
+    const decimals = Math.min(4, Math.max(1, Math.ceil(-Math.log10(tickStep)) + 1));
+    const fixed = Number(safeVal.toFixed(decimals));
+    return (Object.is(fixed, -0) ? 0 : fixed).toFixed(decimals);
+  }
+  if (Math.abs(safeVal) >= 100) return Math.round(safeVal).toString();
+  if (Number.isInteger(safeVal)) return safeVal.toString();
+  const rounded = Number(safeVal.toFixed(1));
+  return (Object.is(rounded, -0) ? 0 : rounded).toFixed(1);
 }
 
 export function BiomarkerTrendChart({
@@ -97,9 +104,10 @@ export function BiomarkerTrendChart({
     .join(' ');
 
   // 5 evenly spaced Y-axis ticks for higher precision
+  const tickStep = (yMax - yMin) / 4;
   const yTicks = [0, 0.25, 0.5, 0.75, 1].map((t) => {
     const val = yMin + t * (yMax - yMin);
-    return { val, y: toY(val), label: formatTick(val) };
+    return { val, y: toY(val), label: formatTick(val, tickStep) };
   });
 
   const highY = high !== null ? toY(high) : null;
