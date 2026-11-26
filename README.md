@@ -187,3 +187,16 @@ All 46 unit and regression tests run using Vitest.
 - MEDUCID operates without a persistent backend database.
 - Uploaded files are processed in-memory or directly inside the client browser.
 - Session information is saved only to the individual user's browser `sessionStorage` and is discarded when the session is closed or cleared.
+
+---
+
+## Builders & Credits
+
+A huge thank you to the builders behind **MEDUCID** — reaching the **Final Round of JU Tech Hackathon 2026** wouldn't have been possible without everyone's dedication, late-night debugging, and teamwork that made this hackathon truly memorable:
+
+| | Builder | GitHub |
+| :---: | :--- | :--- |
+| <img src="https://github.com/anshk1234.png?size=48" width="48" height="48" alt="anshk1234" /> | **anshk1234** | [@anshk1234](https://github.com/anshk1234) |
+| <img src="https://github.com/aryanyadav78.png?size=48" width="48" height="48" alt="aryanyadav78" /> | **aryanyadav78** | [@aryanyadav78](https://github.com/aryanyadav78) |
+| <img src="https://github.com/punit-jangid.png?size=48" width="48" height="48" alt="punit-jangid" /> | **punit-jangid** | [@punit-jangid](https://github.com/punit-jangid) |
+| <img src="https://github.com/AkXiom.png?size=48" width="48" height="48" alt="AkXiom" /> | **AkXiom** | [@AkXiom](https://github.com/AkXiom) |
