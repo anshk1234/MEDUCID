@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X, ExternalLink } from 'lucide-react';
 
 interface BuilderProfile {
@@ -65,11 +66,11 @@ export function CreditsModal({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [open, onClose]);
 
-  if (!open) return null;
+  if (!open || typeof document === 'undefined') return null;
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 backdrop-blur-[2px] p-4"
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/45 backdrop-blur-[2px] p-4"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
@@ -142,7 +143,8 @@ export function CreditsModal({
           ))}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
