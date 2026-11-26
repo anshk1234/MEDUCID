@@ -13,6 +13,7 @@ import { ReportTrackerDashboard } from '@/components/ReportTrackerDashboard';
 import { DashboardHome } from '@/components/DashboardHome';
 import { ShowcaseWebsite } from '@/components/ShowcaseWebsite';
 import { ClarisChatbot } from '@/components/ClarisChatbot';
+import { CreditsButton } from '@/components/CreditsModal';
 import { FileText, LineChart, LayoutDashboard, Globe } from 'lucide-react';
 
 export default function MeducidApp() {
@@ -246,8 +247,10 @@ export default function MeducidApp() {
               </nav>
             </div>
 
-            {/* Right-side status: Isolated session badge */}
+            {/* Right-side status: Credits, GitHub, Isolated session badge */}
             <div className="flex items-center gap-2.5">
+              <CreditsButton />
+
               <a
                 href="https://github.com/anshk1234/MEDUCID"
                 target="_blank"

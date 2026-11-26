@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { CreditsButton } from './CreditsModal';
 import { createPortal } from 'react-dom';
 import {
   Activity, ArrowDownRight, BookOpen, Check, CheckCircle2, ChevronDown,
@@ -72,6 +73,7 @@ function Header({ onOpenDashboard }: { onOpenDashboard: () => void }) {
             ))}
 
           </nav>
+          <CreditsButton className="rounded-xl px-3.5 py-3 text-[11px] font-black uppercase tracking-[.045em] shadow-none hover:shadow-[3px_3px_0_#141414] m-0.5" />
           <a
             href="https://github.com/anshk1234/MEDUCID"
             target="_blank"
