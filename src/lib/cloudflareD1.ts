@@ -13,10 +13,7 @@ interface D1ApiResponse<T = any> {
   messages: string[];
 }
 
-export async function queryD1<T = any>(
-  sql: string,
-  params: any[] = []
-): Promise<T[]> {
+async function runD1Request<T = any>(sql: string, params: any[] = []): Promise<D1ApiResponse<T>> {
   const accountId = process.env.CLOUDFLARE_ACCOUNT_ID?.replace(/["']/g, '').trim();
   const databaseId = process.env.CLOUDFLARE_D1_DATABASE_ID?.replace(/["']/g, '').trim();
   const apiToken = process.env.CLOUDFLARE_API_TOKEN?.replace(/["']/g, '').trim();
@@ -46,7 +43,14 @@ export async function queryD1<T = any>(
     throw new Error(`Cloudflare D1 error: ${response.statusText}`);
   }
 
-  const json: D1ApiResponse<T> = await response.json();
+  return response.json();
+}
+
+export async function queryD1<T = any>(
+  sql: string,
+  params: any[] = []
+): Promise<T[]> {
+  const json = await runD1Request<T>(sql, params);
 
   if (!json.success || !json.result || json.result.length === 0) {
     const msg = json.errors?.map((e) => e.message).join(', ') || 'Query failed';
@@ -60,30 +64,7 @@ export async function executeD1(
   sql: string,
   params: any[] = []
 ): Promise<{ success: boolean; changes?: number }> {
-  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID?.replace(/["']/g, '').trim();
-  const databaseId = process.env.CLOUDFLARE_D1_DATABASE_ID?.replace(/["']/g, '').trim();
-  const apiToken = process.env.CLOUDFLARE_API_TOKEN?.replace(/["']/g, '').trim();
-
-  if (!accountId || !databaseId || !apiToken) {
-    throw new Error('Cloudflare D1 credentials missing in environment variables.');
-  }
-
-  const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/d1/database/${databaseId}/query`;
-
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      sql,
-      params,
-    }),
-    cache: 'no-store',
-  });
-
-  const json: D1ApiResponse = await response.json();
+  const json = await runD1Request(sql, params);
 
   if (!json.success) {
     const msg = json.errors?.map((e) => e.message).join(', ') || 'Execution failed';

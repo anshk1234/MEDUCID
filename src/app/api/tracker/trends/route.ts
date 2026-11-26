@@ -55,8 +55,8 @@ export async function GET() {
 
     const trends = Array.from(metricMap.values());
     return NextResponse.json({ trends });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error fetching trends from Cloudflare D1:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to load biomarker trends.' }, { status: 500 });
   }
 }

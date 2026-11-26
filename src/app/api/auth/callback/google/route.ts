@@ -1,28 +1,51 @@
 import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'crypto';
 import { executeD1 } from '@/lib/cloudflareD1';
-import { setSessionCookie, AuthUser } from '@/lib/authSession';
+import { setSessionCookie, AuthUser, getSafeBaseUrl } from '@/lib/authSession';
 
 export async function GET(req: NextRequest) {
   const searchParams = req.nextUrl.searchParams;
   const code = searchParams.get('code');
   const error = searchParams.get('error');
+  const returnedState = searchParams.get('state');
+  const storedState = req.cookies.get('meducid_oauth_state')?.value;
 
-  const host = req.headers.get('host') || 'localhost:3000';
-  const proto = req.headers.get('x-forwarded-proto') || (host.includes('localhost') ? 'http' : 'https');
-  const baseUrl = `${proto}://${host}`;
+  const baseUrl = getSafeBaseUrl(req);
+
+  const clearStateCookie = (res: NextResponse) => {
+    res.cookies.delete('meducid_oauth_state');
+    return res;
+  };
 
   if (error || !code) {
     console.error('Google OAuth callback error:', error);
-    return NextResponse.redirect(`${baseUrl}/?auth_error=${encodeURIComponent(error || 'cancelled')}`);
+    return clearStateCookie(
+      NextResponse.redirect(`${baseUrl}/?auth_error=${encodeURIComponent(error || 'cancelled')}`)
+    );
+  }
+
+  // Verify CSRF state nonce using constant-time comparison
+  if (
+    !returnedState ||
+    !storedState ||
+    returnedState.length !== storedState.length ||
+    !crypto.timingSafeEqual(Buffer.from(returnedState), Buffer.from(storedState))
+  ) {
+    console.error('Google OAuth CSRF state mismatch');
+    return clearStateCookie(
+      NextResponse.redirect(`${baseUrl}/?auth_error=invalid_state`)
+    );
   }
 
   const clientId = process.env.GOOGLE_CLIENT_ID?.trim() || process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim();
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim();
 
   if (!clientId || !clientSecret) {
-    return NextResponse.json(
-      { error: 'GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET is missing in .env.local' },
-      { status: 500 }
+    return clearStateCookie(
+      NextResponse.json(
+        { error: 'OAuth configuration is missing' },
+        { status: 500 }
+      )
     );
   }
 
@@ -45,7 +68,7 @@ export async function GET(req: NextRequest) {
     if (!tokenRes.ok) {
       const errBody = await tokenRes.text();
       console.error('Google token exchange failed:', tokenRes.status, errBody);
-      return NextResponse.redirect(`${baseUrl}/?auth_error=token_exchange_failed`);
+      return clearStateCookie(NextResponse.redirect(`${baseUrl}/?auth_error=token_exchange_failed`));
     }
 
     const tokenData = await tokenRes.json();
@@ -58,10 +81,14 @@ export async function GET(req: NextRequest) {
 
     if (!profileRes.ok) {
       console.error('Failed to fetch Google userinfo');
-      return NextResponse.redirect(`${baseUrl}/?auth_error=profile_fetch_failed`);
+      return clearStateCookie(NextResponse.redirect(`${baseUrl}/?auth_error=profile_fetch_failed`));
     }
 
     const profile = await profileRes.json();
+
+    if (!profile.sub || !profile.email) {
+      return clearStateCookie(NextResponse.redirect(`${baseUrl}/?auth_error=incomplete_profile`));
+    }
 
     const user: AuthUser = {
       id: profile.sub,
@@ -89,9 +116,9 @@ export async function GET(req: NextRequest) {
     await setSessionCookie(user);
 
     // 5. Redirect back to MEDUCID Report Tracker view
-    return NextResponse.redirect(`${baseUrl}/?view=tracker`);
-  } catch (err: any) {
+    return clearStateCookie(NextResponse.redirect(`${baseUrl}/?view=tracker`));
+  } catch (err) {
     console.error('Fatal Google Auth Callback error:', err);
-    return NextResponse.redirect(`${baseUrl}/?auth_error=${encodeURIComponent(err.message)}`);
+    return clearStateCookie(NextResponse.redirect(`${baseUrl}/?auth_error=auth_failed`));
   }
 }

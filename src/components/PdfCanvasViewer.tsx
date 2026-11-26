@@ -53,7 +53,11 @@ export function PdfCanvasViewer({
         await loadPdfJsLibrary();
         const pdfjsLib = (window as any).pdfjsLib;
 
-        const loadingTask = pdfjsLib.getDocument(pdfUrl);
+        const loadingTask = pdfjsLib.getDocument({
+          url: pdfUrl,
+          isEvalSupported: false,
+          enableScripting: false,
+        });
         const doc = await Promise.race([
           loadingTask.promise,
           new Promise<never>((_, reject) =>
