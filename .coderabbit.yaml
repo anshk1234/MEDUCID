@@ -34,12 +34,13 @@ reviews:
     ignore_title_keywords:
       - "WIP"
       - "DO NOT MERGE"
-    path_filters:
-      - "!**/node_modules/**"
-      - "!**/.next/**"
-      - "!package-lock.json"
-      - "!public/**"
-      - "!docs/images/**"
+
+  path_filters:
+    - "!**/node_modules/**"
+    - "!**/.next/**"
+    - "!package-lock.json"
+    - "!public/**"
+    - "!docs/images/**"
 
   path_instructions:
     - path: "src/app/api/**"

@@ -1,28 +1,15 @@
 'use client';
 
-import React, { useRef, useState } from 'react';
+import React from 'react';
 import { 
   FileText, 
   LineChart, 
   Upload, 
   ArrowRight, 
-  CheckCircle2, 
-  ShieldCheck, 
-  FileCheck2,
-  TrendingUp,
   Sparkles
 } from 'lucide-react';
 import { SimplifiedReport } from '@/types/report';
 import { SYNTHETIC_BENCHMARKS } from '@/data/syntheticReports';
-import {
-  validateUploadFile,
-  prepareFileForExtraction,
-  requestAiExtraction,
-  preflightGatekeeperCheck,
-  GATEKEEPER_REJECTION_MESSAGE,
-} from '@/lib/fileProcessor';
-import { scoreDocumentStructure } from '@/lib/documentGatekeeper';
-import { parseRawReportText } from '@/lib/simplificationEngine';
 
 interface DashboardHomeProps {
   currentReport: SimplifiedReport | null;
@@ -41,121 +28,7 @@ export function DashboardHome({
   onNavigateToTracker,
   onStartProcessing,
   onReportLoaded,
-  onProcessingError,
 }: DashboardHomeProps) {
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isDragOver, setIsDragOver] = useState(false);
-  const [quickValidationError, setQuickValidationError] = useState<string | null>(null);
-
-  // Handle direct file drop or selection right from Dashboard
-  const handleFile = async (file: File) => {
-    setQuickValidationError(null);
-
-    // 1. File extension and size validation
-    const validation = validateUploadFile(file);
-    if (!validation.valid) {
-      setQuickValidationError(validation.error || 'Invalid file.');
-      return;
-    }
-
-    // 2. Instant preflight gatekeeper check (1-20 ms)
-    try {
-      const gateCheck = await preflightGatekeeperCheck(file);
-      if (!gateCheck.isMedicalReport) {
-        setQuickValidationError(gateCheck.error || GATEKEEPER_REJECTION_MESSAGE);
-        return;
-      }
-    } catch {
-      // Continue to extraction workflow
-    }
-
-    onStartProcessing(file.name);
-
-    let prepared: any = null;
-    try {
-      prepared = await prepareFileForExtraction(file);
-
-      const aiResult = await requestAiExtraction({
-        fileBase64: prepared.rawText ? undefined : prepared.fileBase64,
-        mimeType: prepared.rawText ? undefined : prepared.mimeType,
-        rawText: prepared.rawText,
-        fileName: prepared.fileName,
-      });
-
-      const findings = aiResult.report.findings || [];
-      if (findings.length < 3) {
-        const docText = aiResult.report.rawText || prepared.rawText || '';
-        const structureCheck = scoreDocumentStructure(docText);
-        if (!structureCheck.isMedicalReport) {
-          onProcessingError(GATEKEEPER_REJECTION_MESSAGE);
-          return;
-        }
-      }
-
-      if (findings.length === 0) {
-        if (prepared.rawText) {
-          try {
-            const parsed = parseRawReportText(prepared.rawText, file.name);
-            if (parsed.findings.length >= 3) {
-              onReportLoaded(parsed, {
-                fileName: file.name,
-                fileType: prepared.fileType,
-                previewUrl: prepared.previewUrl,
-                fileBase64: prepared.fileBase64,
-              });
-              return;
-            }
-          } catch {}
-        }
-        onProcessingError(GATEKEEPER_REJECTION_MESSAGE);
-        return;
-      }
-
-      onReportLoaded(aiResult.report, {
-        fileName: prepared.fileName,
-        fileType: prepared.fileType,
-        previewUrl: prepared.previewUrl,
-        fileBase64: prepared.fileBase64,
-      });
-    } catch (err: any) {
-      console.warn('AI Extraction error, checking fallback...', err);
-
-      if (err?.message === GATEKEEPER_REJECTION_MESSAGE) {
-        onProcessingError(GATEKEEPER_REJECTION_MESSAGE);
-        return;
-      }
-
-      if (prepared?.rawText) {
-        try {
-          const parsed = parseRawReportText(prepared.rawText, file.name);
-          if (parsed.findings.length >= 3) {
-            onReportLoaded(parsed, {
-              fileName: file.name,
-              fileType: prepared.fileType,
-              previewUrl: prepared.previewUrl,
-              fileBase64: prepared.fileBase64,
-            });
-            return;
-          }
-        } catch (parseErr: any) {
-          if (parseErr?.message === GATEKEEPER_REJECTION_MESSAGE) {
-            onProcessingError(GATEKEEPER_REJECTION_MESSAGE);
-            return;
-          }
-        }
-      }
-      onProcessingError(err.message || 'Failed to extract report data. Please try another file.');
-    }
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(false);
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      handleFile(e.dataTransfer.files[0]);
-    }
-  };
-
   const loadSampleBenchmark = (reportId: string) => {
     const benchmark = SYNTHETIC_BENCHMARKS.find((b) => b.id === reportId) || SYNTHETIC_BENCHMARKS[0];
     onStartProcessing(`${benchmark.title} (Synthetic Benchmark)`);
@@ -253,7 +126,7 @@ export function DashboardHome({
 
               <div>
                 <h2 className="font-serif text-2xl font-bold tracking-[-0.02em] text-ink leading-tight">
-                  Single-Report Simplifier
+                  Report Simplification
                 </h2>
                 <p className="font-sans text-sm text-muted mt-2 leading-relaxed">
                   Extract complete panels across all pages without omission. Read side-by-side verification with source line coordinates and deterministic high/low bounds.
@@ -311,7 +184,7 @@ export function DashboardHome({
 
               <div>
                 <h2 className="font-serif text-2xl font-bold tracking-[-0.02em] text-ink leading-tight">
-                  Biomarker &amp; Report Tracker
+                  Report Tracker
                 </h2>
                 <p className="font-sans text-sm text-muted mt-2 leading-relaxed">
                   Longitudinal health analysis across chronological patient visits. Track fasting glucose, lipid fractions, and hematology trajectories against clinical bounds with Cloudflare D1 persistence.
@@ -351,134 +224,6 @@ export function DashboardHome({
             </div>
           </div>
 
-        </div>
-
-        {/* Direct Ingestion Dropzone */}
-        <div 
-          onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
-          onDragLeave={() => setIsDragOver(false)}
-          onDrop={handleDrop}
-          className={`bg-cream border-2 rounded-2xl p-6 sm:p-8 transition-all shadow-[0_5px_0_rgba(20,20,20,.04)] ${
-            isDragOver ? 'border-lime bg-[#e9f6c4]/40 ring-4 ring-lime/30' : 'border-dashed border-ink/20 hover:border-ink/40'
-          }`}
-        >
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
-            accept=".pdf,.txt,.png,.jpg,.jpeg,.webp,.heic,.docx"
-            className="hidden"
-          />
-
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
-            <div className="flex items-center gap-4 text-left">
-              <div className="w-12 h-12 rounded-xl bg-lime border-2 border-ink flex items-center justify-center text-ink shrink-0 shadow-xs">
-                <Upload className="w-5 h-5" />
-              </div>
-              <div className="space-y-1">
-                <h3 className="font-serif text-lg font-bold text-ink tracking-[-0.02em]">
-                  Direct Ingestion Dropzone
-                </h3>
-                <p className="font-sans text-xs text-muted">
-                  Drag &amp; drop any PDF, scan, or TXT report to immediately parse into the clinical workspace.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3 w-full sm:w-auto">
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="h-11 px-5 rounded-xl border-2 border-ink bg-paper hover:bg-[#eeede6] text-ink text-xs font-black uppercase tracking-wider transition-colors w-full sm:w-auto cursor-pointer"
-              >
-                Browse Document
-              </button>
-            </div>
-          </div>
-
-          {quickValidationError && (
-            <div className="mt-4 text-xs font-bold text-[#9f2e1c] bg-[#ffe0d8] border border-[#ff593e]/40 px-4 py-2.5 rounded-xl">
-              {quickValidationError}
-            </div>
-          )}
-        </div>
-
-        {/* Longitudinal Trajectory Preview Strip */}
-        <div className="bg-cream border-2 border-ink/15 rounded-2xl p-6 sm:p-8 shadow-[0_5px_0_rgba(20,20,20,.05)] space-y-5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="w-7 h-7 rounded-lg bg-lime border border-ink flex items-center justify-center text-ink">
-                <TrendingUp className="w-4 h-4" />
-              </div>
-              <h3 className="font-serif text-lg font-bold text-ink tracking-[-0.02em]">
-                Longitudinal Biomarker Sample Trajectories
-              </h3>
-            </div>
-            <button
-              onClick={onNavigateToTracker}
-              className="text-xs font-bold text-teal hover:underline flex items-center gap-1.5 transition-colors cursor-pointer"
-            >
-              <span>View Full Trajectory</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            
-            {/* Metric 1: Glucose */}
-            <div className="bg-[#eeede6] border border-[#d7d6cf] rounded-xl p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="font-sans text-sm font-bold text-ink">Fasting Glucose</span>
-                <span className="font-mono text-[11px] font-bold px-2 py-0.5 rounded-full bg-[#ffe0d8] text-[#9f2e1c] border border-[#ff593e]/30">
-                  104 mg/dL
-                </span>
-              </div>
-              <div className="font-mono text-xs text-muted">Range: 70 - 99 mg/dL</div>
-              <div className="pt-2 border-t border-[#d7d6cf] flex items-center justify-between text-xs font-mono text-muted">
-                <span>Oct &apos;25: 96</span>
-                <span>→</span>
-                <span>Apr &apos;26: 101</span>
-                <span>→</span>
-                <span className="font-bold text-[#9f2e1c]">Oct &apos;26: 104</span>
-              </div>
-            </div>
-
-            {/* Metric 2: Cholesterol */}
-            <div className="bg-[#eeede6] border border-[#d7d6cf] rounded-xl p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="font-sans text-sm font-bold text-ink">Total Cholesterol</span>
-                <span className="font-mono text-[11px] font-bold px-2 py-0.5 rounded-full bg-[#e7f8b9] text-[#3d5d04] border border-[#6a8e0c]/30">
-                  195 mg/dL
-                </span>
-              </div>
-              <div className="font-mono text-xs text-muted">Range: &lt; 200 mg/dL</div>
-              <div className="pt-2 border-t border-[#d7d6cf] flex items-center justify-between text-xs font-mono text-muted">
-                <span>Oct &apos;25: 215</span>
-                <span>→</span>
-                <span>Apr &apos;26: 205</span>
-                <span>→</span>
-                <span className="font-bold text-[#3d5d04]">Oct &apos;26: 195</span>
-              </div>
-            </div>
-
-            {/* Metric 3: Hemoglobin */}
-            <div className="bg-[#eeede6] border border-[#d7d6cf] rounded-xl p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="font-sans text-sm font-bold text-ink">Hemoglobin</span>
-                <span className="font-mono text-[11px] font-bold px-2 py-0.5 rounded-full bg-[#e7f8b9] text-[#3d5d04] border border-[#6a8e0c]/30">
-                  14.2 g/dL
-                </span>
-              </div>
-              <div className="font-mono text-xs text-muted">Range: 13.0 - 17.5 g/dL</div>
-              <div className="pt-2 border-t border-[#d7d6cf] flex items-center justify-between text-xs font-mono text-muted">
-                <span>Oct &apos;25: 13.8</span>
-                <span>→</span>
-                <span>Apr &apos;26: 14.0</span>
-                <span>→</span>
-                <span className="font-bold text-[#3d5d04]">Oct &apos;26: 14.2</span>
-              </div>
-            </div>
-
-          </div>
         </div>
 
         {/* Clean Ledger Footer Grid */}

@@ -6,6 +6,8 @@ interface RawBiomarkerPoint {
   test_name: string;
   unit: string;
   reference_range: string;
+  range_low: number | null;
+  range_high: number | null;
   original_value: string;
   numeric_value: number | null;
   flag: 'NORMAL' | 'HIGH' | 'LOW';
@@ -20,7 +22,7 @@ export async function GET() {
     }
 
     const rows = await queryD1<RawBiomarkerPoint>(
-      `SELECT test_name, unit, reference_range, original_value, numeric_value, flag, collection_date
+      `SELECT test_name, unit, reference_range, range_low, range_high, original_value, numeric_value, flag, collection_date
        FROM tracked_biomarkers
        WHERE user_id = ? AND numeric_value IS NOT NULL
        ORDER BY collection_date ASC, created_at ASC;`,
@@ -32,21 +34,34 @@ export async function GET() {
       name: string;
       unit: string;
       range: string;
+      rangeLow: number | null;
+      rangeHigh: number | null;
       description: string;
       points: Array<{ date: string; value: number; flag: 'NORMAL' | 'HIGH' | 'LOW' }>;
     }>();
 
     for (const r of rows) {
-      if (!metricMap.has(r.test_name)) {
-        metricMap.set(r.test_name, {
+      let metric = metricMap.get(r.test_name);
+      if (!metric) {
+        metric = {
           name: r.test_name,
           unit: r.unit,
           range: r.reference_range,
+          rangeLow: r.range_low ?? null,
+          rangeHigh: r.range_high ?? null,
           description: `Longitudinal measurements for ${r.test_name}.`,
           points: [],
-        });
+        };
+        metricMap.set(r.test_name, metric);
+      } else if (r.range_low !== null || r.range_high !== null) {
+        // Use the latest row that supplies numeric bounds so earlier null bounds don't stick
+        metric.rangeLow = r.range_low ?? null;
+        metric.rangeHigh = r.range_high ?? null;
+        if (r.reference_range) {
+          metric.range = r.reference_range;
+        }
       }
-      metricMap.get(r.test_name)!.points.push({
+      metric.points.push({
         date: r.collection_date || 'Visit',
         value: r.numeric_value!,
         flag: r.flag || 'NORMAL',
