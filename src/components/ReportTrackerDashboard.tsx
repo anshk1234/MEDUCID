@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import React, { useState, useEffect } from 'react';
 import { 
@@ -7,10 +7,8 @@ import {
   TrendingDown, 
   Calendar, 
   FileText, 
-  Database, 
   ArrowRight, 
   Clock, 
-  ShieldCheck,
   Layers,
   LogOut,
   User,
@@ -21,6 +19,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { SYNTHETIC_BENCHMARKS } from '@/data/syntheticReports';
+import { BiomarkerTrendChart } from './BiomarkerTrendChart';
 
 interface ReportTrackerDashboardProps {
   onSwitchToSimplifier: () => void;
@@ -47,52 +46,19 @@ interface TrendMetric {
   name: string;
   unit: string;
   range: string;
+  rangeLow?: number | null;
+  rangeHigh?: number | null;
   points: { date: string; value: number; flag: 'NORMAL' | 'HIGH' | 'LOW' }[];
   description: string;
 }
 
-const FALLBACK_TRENDS: TrendMetric[] = [
-  {
-    name: 'Fasting Glucose',
-    unit: 'mg/dL',
-    range: '70 - 99',
-    description: 'Blood sugar measured after an overnight fast.',
-    points: [
-      { date: 'May 2026', value: 118, flag: 'HIGH' },
-      { date: 'Aug 2026', value: 105, flag: 'HIGH' },
-      { date: 'Oct 2026', value: 92, flag: 'NORMAL' },
-    ],
-  },
-  {
-    name: 'Total Cholesterol',
-    unit: 'mg/dL',
-    range: '< 200',
-    description: 'Combined measurement of blood circulating lipids.',
-    points: [
-      { date: 'May 2026', value: 238, flag: 'HIGH' },
-      { date: 'Aug 2026', value: 215, flag: 'HIGH' },
-      { date: 'Oct 2026', value: 185, flag: 'NORMAL' },
-    ],
-  },
-  {
-    name: 'Hemoglobin',
-    unit: 'g/dL',
-    range: '12.0 - 16.0',
-    description: 'Oxygen-carrying protein in red blood cells.',
-    points: [
-      { date: 'May 2026', value: 12.8, flag: 'NORMAL' },
-      { date: 'Aug 2026', value: 13.2, flag: 'NORMAL' },
-      { date: 'Oct 2026', value: 13.5, flag: 'NORMAL' },
-    ],
-  },
-];
-
 export function ReportTrackerDashboard({ onSwitchToSimplifier }: ReportTrackerDashboardProps) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
+  const [isLoadingData, setIsLoadingData] = useState(false);
   const [reports, setReports] = useState<HistoricalReport[]>([]);
-  const [trends, setTrends] = useState<TrendMetric[]>(FALLBACK_TRENDS);
-  const [selectedMetric, setSelectedMetric] = useState<string>('Fasting Glucose');
+  const [trends, setTrends] = useState<TrendMetric[]>([]);
+  const [selectedMetric, setSelectedMetric] = useState<string>('');
   const [isSyncing, setIsSyncing] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -108,7 +74,7 @@ export function ReportTrackerDashboard({ onSwitchToSimplifier }: ReportTrackerDa
       const data = await res.json();
       if (data.user) {
         setUser(data.user);
-        loadUserData();
+        await loadUserData();
       } else {
         setUser(null);
       }
@@ -120,27 +86,34 @@ export function ReportTrackerDashboard({ onSwitchToSimplifier }: ReportTrackerDa
   };
 
   const loadUserData = async () => {
+    setIsLoadingData(true);
     try {
-      // 1. Fetch reports from Cloudflare D1
-      const repRes = await fetch('/api/tracker/reports');
+      const [repRes, trRes] = await Promise.all([
+        fetch('/api/tracker/reports'),
+        fetch('/api/tracker/trends'),
+      ]);
+
       if (repRes.ok) {
         const repData = await repRes.json();
-        if (repData.reports && repData.reports.length > 0) {
-          setReports(repData.reports);
-        }
+        setReports(repData.reports || []);
       }
 
-      // 2. Fetch trends from Cloudflare D1
-      const trRes = await fetch('/api/tracker/trends');
       if (trRes.ok) {
         const trData = await trRes.json();
-        if (trData.trends && trData.trends.length > 0) {
-          setTrends(trData.trends);
-          setSelectedMetric(trData.trends[0].name);
+        const loadedTrends: TrendMetric[] = trData.trends || [];
+        setTrends(loadedTrends);
+        if (loadedTrends.length > 0) {
+          setSelectedMetric((prev) =>
+            loadedTrends.some((t) => t.name === prev) ? prev : loadedTrends[0].name
+          );
+        } else {
+          setSelectedMetric('');
         }
       }
     } catch (err) {
       console.warn('Error loading D1 data:', err);
+    } finally {
+      setIsLoadingData(false);
     }
   };
 
@@ -153,7 +126,8 @@ export function ReportTrackerDashboard({ onSwitchToSimplifier }: ReportTrackerDa
       await fetch('/api/auth/logout', { method: 'POST' });
       setUser(null);
       setReports([]);
-      setTrends(FALLBACK_TRENDS);
+      setTrends([]);
+      setSelectedMetric('');
     } catch (err) {
       console.error('Logout error:', err);
     }
@@ -203,15 +177,70 @@ export function ReportTrackerDashboard({ onSwitchToSimplifier }: ReportTrackerDa
     }
   };
 
-  const activeMetric = trends.find((m) => m.name === selectedMetric) || trends[0] || FALLBACK_TRENDS[0];
+  const activeMetric = trends.find((m) => m.name === selectedMetric) || trends[0] || null;
 
-  // 1. Loading State
+  // 1. Loading State (SaaS Skeleton)
   if (isLoadingAuth) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-[#FAF9F6] p-8">
-        <div className="flex items-center gap-2.5 text-xs font-mono text-[#737373]">
-          <RefreshCw className="w-4 h-4 animate-spin text-[#115E59]" />
-          <span>Verifying authenticated session...</span>
+      <div className="flex-1 overflow-y-auto bg-paper py-10 px-4 sm:px-6">
+        <div className="max-w-[1100px] mx-auto space-y-8 animate-pulse">
+          {/* User Header Skeleton */}
+          <div className="bg-cream border-2 border-ink/10 rounded-2xl p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-[#e2e0d8]" />
+              <div className="space-y-2">
+                <div className="h-5 w-40 rounded bg-[#e2e0d8]" />
+                <div className="h-3 w-56 rounded bg-[#eeede6]" />
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-24 rounded-xl bg-[#eeede6]" />
+              <div className="h-10 w-44 rounded-xl bg-[#e2e0d8]" />
+            </div>
+          </div>
+
+          {/* 2 Metric Cards Skeleton */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            {[0, 1].map((i) => (
+              <div key={i} className="bg-cream p-6 rounded-2xl border-2 border-ink/10 space-y-3">
+                <div className="h-3 w-32 rounded bg-[#e2e0d8]" />
+                <div className="h-8 w-16 rounded bg-[#e2e0d8]" />
+                <div className="h-3 w-40 rounded bg-[#eeede6]" />
+              </div>
+            ))}
+          </div>
+
+          {/* Biomarker Trajectory Card Skeleton */}
+          <div className="bg-cream rounded-2xl border-2 border-ink/10 p-6 sm:p-8 space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-black/5 pb-4">
+              <div className="space-y-2">
+                <div className="h-6 w-64 rounded bg-[#e2e0d8]" />
+                <div className="h-3 w-80 rounded bg-[#eeede6]" />
+              </div>
+              <div className="flex gap-2">
+                <div className="h-8 w-24 rounded-lg bg-[#e2e0d8]" />
+                <div className="h-8 w-20 rounded-lg bg-[#eeede6]" />
+                <div className="h-8 w-28 rounded-lg bg-[#eeede6]" />
+              </div>
+            </div>
+
+            <div className="bg-[#eeede6] border border-[#d7d6cf] rounded-xl p-6 space-y-6">
+              <div className="flex justify-between items-center">
+                <div className="h-5 w-40 rounded bg-[#d7d6cf]" />
+                <div className="h-6 w-32 rounded bg-[#d7d6cf]" />
+              </div>
+              <div className="h-56 w-full rounded-xl bg-cream border border-ink/10" />
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {[0, 1, 2].map((c) => (
+                  <div key={c} className="bg-cream p-5 rounded-xl border border-ink/10 space-y-3">
+                    <div className="h-3 w-24 rounded bg-[#e2e0d8]" />
+                    <div className="h-7 w-28 rounded bg-[#e2e0d8]" />
+                    <div className="h-3 w-36 rounded bg-[#eeede6]" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -335,49 +364,8 @@ export function ReportTrackerDashboard({ onSwitchToSimplifier }: ReportTrackerDa
           </div>
         </div>
 
-        {/* Cloudflare Edge Database Architecture Ledger */}
-        <div className="bg-cream border-2 border-ink/15 rounded-2xl p-6 sm:p-8 shadow-[0_5px_0_rgba(20,20,20,.05)] space-y-4">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-black/10">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-ink border-2 border-ink flex items-center justify-center text-lime shadow-xs">
-                <Database className="w-5 h-5" />
-              </div>
-              <div>
-                <span className="font-mono text-xs uppercase tracking-[0.05em] text-muted font-bold">
-                  Connected Storage
-                </span>
-                <h2 className="font-serif text-lg font-bold text-ink tracking-[-0.02em]">
-                  Cloudflare D1 SQL Database (`meducid-db`)
-                </h2>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <span className="font-mono text-xs uppercase tracking-[0.05em] text-[#3d5d04] bg-[#e7f8b9] border border-[#6a8e0c]/40 px-2.5 py-1 rounded-full font-bold">
-                Live Edge Querying
-              </span>
-            </div>
-          </div>
-
-          <p className="font-sans text-sm text-muted leading-relaxed">
-            All records in this tracker are queried in real time directly from your serverless Cloudflare D1 database. Historical panels and longitudinal biomarker trajectories are isolated strictly to your authenticated Google account.
-          </p>
-
-          {/* Recessed Technical Sub-box */}
-          <div className="bg-[#eeede6] border border-[#d7d6cf] rounded-xl divide-y divide-[#d7d6cf] text-xs font-mono">
-            <div className="px-4 py-3 flex items-center justify-between">
-              <span className="text-muted font-sans font-medium">Database Target</span>
-              <span className="text-ink font-bold font-mono">Cloudflare D1 Edge SQL</span>
-            </div>
-            <div className="px-4 py-3 flex items-center justify-between">
-              <span className="text-muted font-sans font-medium">Authentication &amp; Session</span>
-              <span className="text-[#3d5d04] font-bold">Google OAuth · 30-Day HttpOnly Cookie</span>
-            </div>
-          </div>
-        </div>
-
         {/* Metrics Overview Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
           
           <div className="bg-cream p-6 rounded-2xl border-2 border-ink/15 shadow-[0_5px_0_rgba(20,20,20,.05)] space-y-2">
             <div className="flex items-center justify-between text-xs font-mono uppercase tracking-[0.05em] text-muted font-bold">
@@ -399,17 +387,6 @@ export function ReportTrackerDashboard({ onSwitchToSimplifier }: ReportTrackerDa
             <div className="font-mono text-3xl font-black text-teal">{trends.length}</div>
             <div className="font-mono text-xs text-teal font-bold pt-1">
               {trends.length} active trajectory curves
-            </div>
-          </div>
-
-          <div className="bg-cream p-6 rounded-2xl border-2 border-ink/15 shadow-[0_5px_0_rgba(20,20,20,.05)] space-y-2">
-            <div className="flex items-center justify-between text-xs font-mono uppercase tracking-[0.05em] text-muted font-bold">
-              <span>Database Sync</span>
-              <ShieldCheck className="w-4 h-4 text-[#3d5d04]" />
-            </div>
-            <div className="font-mono text-3xl font-black text-[#3d5d04]">D1 SQL</div>
-            <div className="font-sans text-xs text-muted pt-1">
-              Real-time serverless persistence
             </div>
           </div>
 
@@ -472,6 +449,28 @@ export function ReportTrackerDashboard({ onSwitchToSimplifier }: ReportTrackerDa
           </div>
 
           {/* Active Biomarker Recessed Visualizer */}
+          {isLoadingData && trends.length === 0 ? (
+            <div className="bg-[#eeede6] border border-[#d7d6cf] rounded-xl p-6 space-y-6 animate-pulse">
+              <div className="flex justify-between items-center">
+                <div className="h-5 w-40 rounded bg-[#d7d6cf]" />
+                <div className="h-6 w-32 rounded bg-[#d7d6cf]" />
+              </div>
+              <div className="h-56 w-full rounded-xl bg-cream border border-ink/10" />
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {[0, 1, 2].map((c) => (
+                  <div key={c} className="bg-cream p-5 rounded-xl border border-ink/10 space-y-3">
+                    <div className="h-3 w-24 rounded bg-[#e2e0d8]" />
+                    <div className="h-7 w-28 rounded bg-[#e2e0d8]" />
+                    <div className="h-3 w-36 rounded bg-[#eeede6]" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : !activeMetric ? (
+            <div className="bg-[#eeede6] border border-[#d7d6cf] rounded-xl p-8 text-center text-xs font-mono text-muted">
+              No biomarker trajectories recorded yet. Analyze and save a report, or sync sample visits above.
+            </div>
+          ) : (
           <div className="bg-[#eeede6] border border-[#d7d6cf] rounded-xl p-6 space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
@@ -495,6 +494,16 @@ export function ReportTrackerDashboard({ onSwitchToSimplifier }: ReportTrackerDa
                 </div>
               )}
             </div>
+
+            {/* Line Graph with Upper & Lower Reference Limits */}
+            <BiomarkerTrendChart
+              name={activeMetric.name}
+              unit={activeMetric.unit}
+              range={activeMetric.range}
+              rangeLow={activeMetric.rangeLow}
+              rangeHigh={activeMetric.rangeHigh}
+              points={activeMetric.points || []}
+            />
 
             {/* Visual Step Timeline */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
@@ -545,6 +554,7 @@ export function ReportTrackerDashboard({ onSwitchToSimplifier }: ReportTrackerDa
               })}
             </div>
           </div>
+          )}
         </div>
 
         {/* Historical Uploaded Reports Table */}

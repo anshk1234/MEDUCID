@@ -6,6 +6,8 @@ interface RawBiomarkerPoint {
   test_name: string;
   unit: string;
   reference_range: string;
+  range_low: number | null;
+  range_high: number | null;
   original_value: string;
   numeric_value: number | null;
   flag: 'NORMAL' | 'HIGH' | 'LOW';
@@ -20,7 +22,7 @@ export async function GET() {
     }
 
     const rows = await queryD1<RawBiomarkerPoint>(
-      `SELECT test_name, unit, reference_range, original_value, numeric_value, flag, collection_date
+      `SELECT test_name, unit, reference_range, range_low, range_high, original_value, numeric_value, flag, collection_date
        FROM tracked_biomarkers
        WHERE user_id = ? AND numeric_value IS NOT NULL
        ORDER BY collection_date ASC, created_at ASC;`,
@@ -32,6 +34,8 @@ export async function GET() {
       name: string;
       unit: string;
       range: string;
+      rangeLow: number | null;
+      rangeHigh: number | null;
       description: string;
       points: Array<{ date: string; value: number; flag: 'NORMAL' | 'HIGH' | 'LOW' }>;
     }>();
@@ -42,6 +46,8 @@ export async function GET() {
           name: r.test_name,
           unit: r.unit,
           range: r.reference_range,
+          rangeLow: r.range_low ?? null,
+          rangeHigh: r.range_high ?? null,
           description: `Longitudinal measurements for ${r.test_name}.`,
           points: [],
         });
