@@ -20,8 +20,8 @@ export async function GET() {
     );
 
     return NextResponse.json({ reports });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error fetching tracked reports:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to load reports.' }, { status: 500 });
   }
 }

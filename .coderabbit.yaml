@@ -1,0 +1,57 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: "en-US"
+early_access: false
+
+reviews:
+  profile: "assertive"
+  request_changes_workflow: false
+  high_level_summary: true
+  review_status: true
+  poem: false
+  collapse_walkthrough: false
+
+  # Disable all CodeRabbit code-editing / PR-commit / autofix features (read-only reviews only)
+  finishing_touches:
+    autofix:
+      enabled: false
+    fix_ci:
+      enabled: false
+    resolve_merge_conflict:
+      enabled: false
+    unit_tests:
+      enabled: false
+    simplify:
+      enabled: false
+    docstrings:
+      enabled: false
+
+  auto_review:
+    enabled: true
+    drafts: false
+    auto_incremental_review: true
+    base_branches:
+      - "main"
+    ignore_title_keywords:
+      - "WIP"
+      - "DO NOT MERGE"
+    path_filters:
+      - "!**/node_modules/**"
+      - "!**/.next/**"
+      - "!package-lock.json"
+      - "!public/**"
+      - "!docs/images/**"
+
+  path_instructions:
+    - path: "src/app/api/**"
+      instructions: >
+        Verify authentication checks (getCurrentUser()), input validation, rate limiting,
+        strictly parameterized Cloudflare D1 queries (params array only, zero SQL string interpolation),
+        IDOR ownership checks (user.id), and no internal error message leakage.
+    - path: "src/lib/**"
+      instructions: >
+        Ensure strict clinical safety guardrails: test names, values, units, and reference ranges
+        must remain verbatim, explanations must stay non-diagnostic, and no secrets or hardcoded
+        fallbacks are introduced.
+
+chat:
+  auto_reply: true

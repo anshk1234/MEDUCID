@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { executeD1, queryD1 } from '@/lib/cloudflareD1';
+import { executeD1 } from '@/lib/cloudflareD1';
 import { setSessionCookie, AuthUser } from '@/lib/authSession';
 
 export async function POST(req: NextRequest) {
@@ -9,35 +9,54 @@ export async function POST(req: NextRequest) {
 
     let user: AuthUser;
 
-    if (credential) {
-      // Decode Google ID Token payload (standard JWT part 2)
-      const parts = credential.split('.');
-      if (parts.length < 2) {
-        return NextResponse.json({ error: 'Invalid Google token' }, { status: 400 });
+    if (typeof credential === 'string' && credential.trim().length > 0) {
+      const clientId = process.env.GOOGLE_CLIENT_ID?.trim() || process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim();
+      if (!clientId) {
+        return NextResponse.json({ error: 'OAuth client is not configured' }, { status: 500 });
       }
-      const payloadJson = Buffer.from(parts[1], 'base64').toString('utf8');
-      const payload = JSON.parse(payloadJson);
 
-      if (!payload.sub || !payload.email) {
-        return NextResponse.json({ error: 'Incomplete Google profile' }, { status: 400 });
+      // Cryptographically verify Google ID Token via Google's tokeninfo endpoint
+      const verifyRes = await fetch(
+        `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(credential.trim())}`,
+        { cache: 'no-store' }
+      );
+
+      if (!verifyRes.ok) {
+        return NextResponse.json({ error: 'Invalid or expired Google token' }, { status: 401 });
+      }
+
+      const payload = await verifyRes.json();
+      const validIss =
+        payload.iss === 'accounts.google.com' ||
+        payload.iss === 'https://accounts.google.com';
+
+      if (!validIss || payload.aud !== clientId || !payload.sub || !payload.email) {
+        return NextResponse.json({ error: 'Google token verification failed' }, { status: 401 });
+      }
+
+      if (payload.email_verified !== true && payload.email_verified !== 'true') {
+        return NextResponse.json({ error: 'Google email is not verified' }, { status: 401 });
       }
 
       user = {
-        id: payload.sub,
-        email: payload.email,
-        name: payload.name || payload.email.split('@')[0],
-        picture: payload.picture,
+        id: String(payload.sub),
+        email: String(payload.email),
+        name: String(payload.name || payload.email.split('@')[0]),
+        picture: payload.picture ? String(payload.picture) : undefined,
       };
     } else if (demoUser) {
-      // Developer / Sandbox account for fast local testing
+      // Strictly disallow demo auth in production or unless explicitly enabled in dev
+      if (process.env.NODE_ENV === 'production' || process.env.ENABLE_DEMO_AUTH !== 'true') {
+        return NextResponse.json({ error: 'Demo authentication is disabled' }, { status: 403 });
+      }
       user = {
-        id: demoUser.id || 'usr-demo-dr-vance',
-        email: demoUser.email || 'dr.vance@meducid.internal',
-        name: demoUser.name || 'Dr. Arthur Vance (Clinician)',
-        picture: demoUser.picture || '',
+        id: 'usr-demo-dr-vance',
+        email: 'dr.vance@meducid.internal',
+        name: 'Dr. Arthur Vance (Clinician)',
+        picture: '',
       };
     } else {
-      return NextResponse.json({ error: 'Missing credential or demo payload' }, { status: 400 });
+      return NextResponse.json({ error: 'Missing credential' }, { status: 400 });
     }
 
     // Upsert into Cloudflare D1
@@ -59,10 +78,10 @@ export async function POST(req: NextRequest) {
     await setSessionCookie(user);
 
     return NextResponse.json({ success: true, user });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Google Auth Route Error:', error);
     return NextResponse.json(
-      { error: error.message || 'Authentication failed' },
+      { error: 'Authentication failed' },
       { status: 500 }
     );
   }
