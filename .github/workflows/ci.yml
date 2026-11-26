@@ -30,6 +30,9 @@ jobs:
   quality-and-build:
     name: Tests & Production Build
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
     env:
       NEXT_TELEMETRY_DISABLED: 1
       CI: true
@@ -59,6 +62,7 @@ jobs:
         run: npm ci
 
       - name: TypeScript Type Check
+        id: typecheck
         run: npx tsc --noEmit
 
       # 3. Code Quality & Linting
@@ -66,10 +70,69 @@ jobs:
         run: npm run lint
         continue-on-error: true
 
-      # Unit Tests (All 64 clinical tests: gatekeeper, range parser, factual consistency)
+      # Unit Tests (Vitest suite with JSON summary output)
       - name: Run Unit Tests
-        run: npm test
+        id: unit-tests
+        run: npx vitest run --reporter=default --reporter=json --outputFile=test-results.json
 
       # Production Build Verification (Ensures Next.js compiles cleanly)
       - name: Production Build Check
+        id: build
         run: npm run build
+
+      - name: Post PR Test Summary
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let total = 0;
+            let passed = 0;
+            let failed = 0;
+
+            if (fs.existsSync('test-results.json')) {
+              const results = JSON.parse(fs.readFileSync('test-results.json', 'utf8'));
+              total = results.numTotalTests ?? 0;
+              passed = results.numPassedTests ?? 0;
+              failed = results.numFailedTests ?? 0;
+            }
+
+            const typecheckOk = '${{ steps.typecheck.outcome }}' === 'success';
+            const testsOk = '${{ steps.unit-tests.outcome }}' === 'success';
+            const buildOk = '${{ steps.build.outcome }}' === 'success';
+            const readyToMerge = typecheckOk && testsOk && buildOk && failed === 0;
+
+            const marker = '<!-- meducid-ci-summary -->';
+            const body = `${marker}
+            ### CI Test Summary
+            - **No. of tests:** ${total}
+            - **Passed:** ${passed}
+            - **Failed:** ${failed}
+            - **Ready to merge:** ${readyToMerge ? '✅ Yes' : '❌ No'}`;
+
+            const cleanBody = body.replace(/^ {12}/gm, '');
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner,
+              repo,
+              issue_number,
+            });
+            const existing = comments.find((c) => c.body && c.body.includes(marker));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: existing.id,
+                body: cleanBody,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number,
+                body: cleanBody,
+              });
+            }
