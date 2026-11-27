@@ -1,16 +1,16 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, FileText, ChevronDown, Camera, AlertCircle, Sparkles } from 'lucide-react';
+import { Upload, FileText, Camera, AlertCircle, Sparkles } from 'lucide-react';
 import {
   validateUploadFile,
   prepareFileForExtraction,
   requestAiExtraction,
   preflightGatekeeperCheck,
+  fetchDemoReportFile,
   GATEKEEPER_REJECTION_MESSAGE,
 } from '@/lib/fileProcessor';
 import { scoreDocumentStructure } from '@/lib/documentGatekeeper';
-import { SYNTHETIC_BENCHMARKS } from '@/data/syntheticReports';
 import { SimplifiedReport } from '@/types/report';
 import { parseRawReportText } from '@/lib/simplificationEngine';
 
@@ -27,25 +27,12 @@ export function LandingScreen({
 }: LandingScreenProps) {
   const [isDragOver, setIsDragOver] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
-  const [isSampleMenuOpen, setIsSampleMenuOpen] = useState(false);
   const [isPasteModalOpen, setIsPasteModalOpen] = useState(false);
   const [pastedText, setPastedText] = useState('');
   const [pastedTitle, setPastedTitle] = useState('Pasted Lab Report');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
-  const sampleMenuRef = useRef<HTMLDivElement>(null);
-
-  // Close sample menu on outside click
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (sampleMenuRef.current && !sampleMenuRef.current.contains(event.target as Node)) {
-        setIsSampleMenuOpen(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   // Clipboard paste listener on window (image or text)
   useEffect(() => {
@@ -259,15 +246,14 @@ export function LandingScreen({
     setIsDragOver(false);
   };
 
-  const handleSampleSelect = (bench: SimplifiedReport) => {
-    setIsSampleMenuOpen(false);
-    onStartProcessing(bench.title);
-    setTimeout(() => {
-      onReportLoaded(bench, {
-        fileName: `${bench.title.replace(/\s+/g, '_')}.txt`,
-        fileType: 'text',
-      });
-    }, 400);
+  const handleTryDemoReport = async () => {
+    setValidationError(null);
+    try {
+      const demoFile = await fetchDemoReportFile();
+      await handleSelectedFile(demoFile);
+    } catch (err: any) {
+      setValidationError(err?.message || 'Unable to load demo report PDF.');
+    }
   };
 
   return (
@@ -386,36 +372,16 @@ export function LandingScreen({
             Use synthetic or de-identified reports only. Files are client-scoped and purged upon session reset.
           </p>
 
-          {/* Line 3: Sample Reports Menu */}
-          <div className="pt-2 relative inline-block text-left" ref={sampleMenuRef}>
+          {/* Line 3: Try with a demo report */}
+          <div className="pt-2 inline-block">
             <button
               type="button"
-              onClick={() => setIsSampleMenuOpen(!isSampleMenuOpen)}
+              onClick={handleTryDemoReport}
               className="text-xs text-ink hover:text-teal font-bold inline-flex items-center gap-1.5 underline underline-offset-3 cursor-pointer"
             >
               <Sparkles className="w-3.5 h-3.5 text-coral" />
-              <span>Try a synthetic sample report</span>
-              <ChevronDown className="w-3 h-3 text-ink" />
+              <span>Try with a demo report</span>
             </button>
-
-            {isSampleMenuOpen && (
-              <div className="absolute left-1/2 -translate-x-1/2 mt-2 w-72 bg-cream border-2 border-ink/20 rounded-xl shadow-[0_5px_0_rgba(20,20,20,.05)] py-1.5 z-30 animate-in fade-in zoom-in-95 duration-100 text-left divide-y divide-black/10">
-                <div className="px-3.5 py-1.5 text-[10px] font-mono uppercase tracking-[0.05em] text-muted font-bold">
-                  Synthetic Laboratory Benchmarks
-                </div>
-                {SYNTHETIC_BENCHMARKS.map((bench) => (
-                  <button
-                    key={bench.id}
-                    type="button"
-                    onClick={() => handleSampleSelect(bench)}
-                    className="w-full px-3.5 py-2.5 text-xs text-ink hover:bg-paper flex items-center justify-between text-left transition-colors cursor-pointer"
-                  >
-                    <span className="font-bold">{bench.title.split('(')[0].trim()}</span>
-                    <span className="font-mono text-[10px] text-muted uppercase font-bold">{bench.findings.length} Tests</span>
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
         </div>
       </div>
