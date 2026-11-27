@@ -9,7 +9,14 @@ import {
   Sparkles
 } from 'lucide-react';
 import { SimplifiedReport } from '@/types/report';
-import { SYNTHETIC_BENCHMARKS } from '@/data/syntheticReports';
+import {
+  fetchDemoReportFile,
+  prepareFileForExtraction,
+  requestAiExtraction,
+  GATEKEEPER_REJECTION_MESSAGE,
+} from '@/lib/fileProcessor';
+import { scoreDocumentStructure } from '@/lib/documentGatekeeper';
+import { parseRawReportText } from '@/lib/simplificationEngine';
 
 interface DashboardHomeProps {
   currentReport: SimplifiedReport | null;
@@ -28,16 +35,87 @@ export function DashboardHome({
   onNavigateToTracker,
   onStartProcessing,
   onReportLoaded,
+  onProcessingError,
 }: DashboardHomeProps) {
-  const loadSampleBenchmark = (reportId: string) => {
-    const benchmark = SYNTHETIC_BENCHMARKS.find((b) => b.id === reportId) || SYNTHETIC_BENCHMARKS[0];
-    onStartProcessing(`${benchmark.title} (Synthetic Benchmark)`);
-    setTimeout(() => {
-      onReportLoaded(benchmark, {
-        fileName: `${benchmark.title}.txt`,
-        fileType: 'text/plain',
+  const handleTryDemoReport = async () => {
+    let demoFile: File | null = null;
+    let prepared: Awaited<ReturnType<typeof prepareFileForExtraction>> | null = null;
+
+    try {
+      demoFile = await fetchDemoReportFile();
+      onStartProcessing(demoFile.name);
+
+      prepared = await prepareFileForExtraction(demoFile);
+      const aiResult = await requestAiExtraction({
+        fileBase64: prepared.rawText ? undefined : prepared.fileBase64,
+        mimeType: prepared.rawText ? undefined : prepared.mimeType,
+        rawText: prepared.rawText,
+        fileName: prepared.fileName,
       });
-    }, 450);
+
+      const findings = aiResult.report.findings || [];
+      if (findings.length < 3) {
+        const docText = aiResult.report.rawText || prepared.rawText || '';
+        const structureCheck = scoreDocumentStructure(docText);
+        if (!structureCheck.isMedicalReport) {
+          onProcessingError(GATEKEEPER_REJECTION_MESSAGE);
+          return;
+        }
+      }
+
+      if (findings.length === 0) {
+        if (prepared.rawText) {
+          try {
+            const parsed = parseRawReportText(prepared.rawText, demoFile.name);
+            if (parsed.findings.length >= 3) {
+              onReportLoaded(parsed, {
+                fileName: demoFile.name,
+                fileType: prepared.fileType,
+                previewUrl: prepared.previewUrl,
+                fileBase64: prepared.fileBase64,
+              });
+              return;
+            }
+          } catch {}
+        }
+        onProcessingError(GATEKEEPER_REJECTION_MESSAGE);
+        return;
+      }
+
+      onReportLoaded(aiResult.report, {
+        fileName: prepared.fileName,
+        fileType: prepared.fileType,
+        previewUrl: prepared.previewUrl,
+        fileBase64: prepared.fileBase64,
+      });
+    } catch (err: any) {
+      if (err?.message === GATEKEEPER_REJECTION_MESSAGE) {
+        onProcessingError(GATEKEEPER_REJECTION_MESSAGE);
+        return;
+      }
+
+      if (prepared?.rawText && demoFile) {
+        try {
+          const parsed = parseRawReportText(prepared.rawText, demoFile.name);
+          if (parsed.findings.length >= 3) {
+            onReportLoaded(parsed, {
+              fileName: demoFile.name,
+              fileType: prepared.fileType,
+              previewUrl: prepared.previewUrl,
+              fileBase64: prepared.fileBase64,
+            });
+            return;
+          }
+        } catch (parseErr: any) {
+          if (parseErr?.message === GATEKEEPER_REJECTION_MESSAGE) {
+            onProcessingError(GATEKEEPER_REJECTION_MESSAGE);
+            return;
+          }
+        }
+      }
+
+      onProcessingError(err?.message || 'Failed to load demo report.');
+    }
   };
 
   return (
@@ -161,11 +239,11 @@ export function DashboardHome({
               </button>
 
               <button
-                onClick={() => loadSampleBenchmark('multi-01')}
+                onClick={handleTryDemoReport}
                 className="w-full h-11 px-4 rounded-xl bg-paper border border-black/15 text-muted hover:text-ink hover:bg-[#eeede6] text-xs font-bold transition-colors flex items-center justify-center gap-2 cursor-pointer"
               >
                 <Sparkles className="w-3.5 h-3.5 text-coral" />
-                <span>Load Synthetic Benchmark (43 Biomarkers)</span>
+                <span>Try with a demo report</span>
               </button>
             </div>
           </div>

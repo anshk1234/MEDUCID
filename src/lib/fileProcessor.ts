@@ -431,3 +431,16 @@ export async function requestAiExtraction(payload: {
     keyIndexUsed: data.keyIndexUsed,
   };
 }
+
+/**
+ * Fetches the bundled synthetic demo PDF from /demo-report.pdf as a File object
+ * so it flows through the exact standard upload & simplification pipeline.
+ */
+export async function fetchDemoReportFile(): Promise<File> {
+  const res = await fetch('/demo-report.pdf', { cache: 'no-store' });
+  if (!res.ok) {
+    throw new Error('Unable to load demo report PDF.');
+  }
+  const blob = await res.blob();
+  return new File([blob], 'demo-report.pdf', { type: 'application/pdf' });
+}
