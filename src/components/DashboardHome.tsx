@@ -38,11 +38,14 @@ export function DashboardHome({
   onProcessingError,
 }: DashboardHomeProps) {
   const handleTryDemoReport = async () => {
+    let demoFile: File | null = null;
+    let prepared: Awaited<ReturnType<typeof prepareFileForExtraction>> | null = null;
+
     try {
-      const demoFile = await fetchDemoReportFile();
+      demoFile = await fetchDemoReportFile();
       onStartProcessing(demoFile.name);
 
-      const prepared = await prepareFileForExtraction(demoFile);
+      prepared = await prepareFileForExtraction(demoFile);
       const aiResult = await requestAiExtraction({
         fileBase64: prepared.rawText ? undefined : prepared.fileBase64,
         mimeType: prepared.rawText ? undefined : prepared.mimeType,
@@ -60,17 +63,23 @@ export function DashboardHome({
         }
       }
 
-      if (findings.length === 0 && prepared.rawText) {
-        const parsed = parseRawReportText(prepared.rawText, demoFile.name);
-        if (parsed.findings.length >= 3) {
-          onReportLoaded(parsed, {
-            fileName: demoFile.name,
-            fileType: prepared.fileType,
-            previewUrl: prepared.previewUrl,
-            fileBase64: prepared.fileBase64,
-          });
-          return;
+      if (findings.length === 0) {
+        if (prepared.rawText) {
+          try {
+            const parsed = parseRawReportText(prepared.rawText, demoFile.name);
+            if (parsed.findings.length >= 3) {
+              onReportLoaded(parsed, {
+                fileName: demoFile.name,
+                fileType: prepared.fileType,
+                previewUrl: prepared.previewUrl,
+                fileBase64: prepared.fileBase64,
+              });
+              return;
+            }
+          } catch {}
         }
+        onProcessingError(GATEKEEPER_REJECTION_MESSAGE);
+        return;
       }
 
       onReportLoaded(aiResult.report, {
@@ -80,6 +89,31 @@ export function DashboardHome({
         fileBase64: prepared.fileBase64,
       });
     } catch (err: any) {
+      if (err?.message === GATEKEEPER_REJECTION_MESSAGE) {
+        onProcessingError(GATEKEEPER_REJECTION_MESSAGE);
+        return;
+      }
+
+      if (prepared?.rawText && demoFile) {
+        try {
+          const parsed = parseRawReportText(prepared.rawText, demoFile.name);
+          if (parsed.findings.length >= 3) {
+            onReportLoaded(parsed, {
+              fileName: demoFile.name,
+              fileType: prepared.fileType,
+              previewUrl: prepared.previewUrl,
+              fileBase64: prepared.fileBase64,
+            });
+            return;
+          }
+        } catch (parseErr: any) {
+          if (parseErr?.message === GATEKEEPER_REJECTION_MESSAGE) {
+            onProcessingError(GATEKEEPER_REJECTION_MESSAGE);
+            return;
+          }
+        }
+      }
+
       onProcessingError(err?.message || 'Failed to load demo report.');
     }
   };
